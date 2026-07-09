@@ -1,6 +1,6 @@
 "use server";
 
-import { inArray, eq, sql } from "drizzle-orm";
+import { inArray, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { sourceProducts, STATUS_VALUES, type ProductStatus } from "@/db/schema";
@@ -20,8 +20,8 @@ export async function sendSelectedToPipeline(ids: number[]): Promise<{ sent: num
     .update(sourceProducts)
     .set({
       status: "in_pipeline",
-      sentToPipelineAt: sql`(current_timestamp)`,
-      updatedAt: sql`(current_timestamp)`,
+      sentToPipelineAt: new Date(),
+      updatedAt: new Date(),
     })
     .where(inArray(sourceProducts.id, ids));
 
@@ -40,7 +40,7 @@ export async function updateProductStatus(id: number, status: ProductStatus): Pr
 
   await db
     .update(sourceProducts)
-    .set({ status, updatedAt: sql`(current_timestamp)` })
+    .set({ status, updatedAt: new Date() })
     .where(eq(sourceProducts.id, id));
 
   revalidatePath("/");

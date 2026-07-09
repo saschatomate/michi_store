@@ -1,6 +1,7 @@
 import { desc } from "drizzle-orm";
 import { db } from "@/db/client";
 import { importRuns } from "@/db/schema";
+import { formatDateTime } from "@/lib/format";
 import { UploadForm } from "./UploadForm";
 
 export default async function ImportPage() {
@@ -48,7 +49,7 @@ export default async function ImportPage() {
             {history.map((run) => (
               <tr key={run.id} className="border-b border-neutral-50 last:border-0">
                 <td className="px-4 py-2">{run.filename}</td>
-                <td className="px-4 py-2 text-neutral-500">{run.startedAt}</td>
+                <td className="px-4 py-2 text-neutral-500">{formatDateTime(run.startedAt)}</td>
                 <td className="px-4 py-2">
                   <span
                     className={

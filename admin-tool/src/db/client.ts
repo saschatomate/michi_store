@@ -1,17 +1,14 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import path from "node:path";
-import fs from "node:fs";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 
-const dataDir = path.join(process.cwd(), "data");
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error("DATABASE_URL ist nicht gesetzt (.env.local prüfen, Supabase-Connection-String).");
 }
 
-const dbPath = process.env.DATABASE_PATH ?? path.join(dataDir, "app.db");
-const sqlite = new Database(dbPath);
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
+// prepare: false ist bei Supabase Pflicht, sobald der Transaction Pooler (Port 6543) verwendet wird –
+// der Pooler unterstützt keine Prepared Statements über Verbindungen hinweg.
+const client = postgres(connectionString, { prepare: false, ssl: "require" });
 
-export const db = drizzle(sqlite, { schema });
+export const db = drizzle(client, { schema });

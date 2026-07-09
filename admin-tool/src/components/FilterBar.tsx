@@ -1,11 +1,11 @@
 import { isNotNull } from "drizzle-orm";
-import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
+import type { PgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
 import { sourceProducts, STATUS_VALUES } from "@/db/schema";
 import { STATUS_LABELS } from "@/components/StatusBadge";
 import type { ProductFilters } from "@/lib/product-query";
 
-async function distinctValues(column: SQLiteColumn) {
+async function distinctValues(column: PgColumn) {
   const rows = await db
     .selectDistinct({ value: column })
     .from(sourceProducts)

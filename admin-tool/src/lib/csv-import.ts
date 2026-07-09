@@ -1,6 +1,6 @@
 import iconv from "iconv-lite";
 import { parse } from "csv-parse/sync";
-import { eq, sql } from "drizzle-orm";
+import { eq, getTableColumns, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { sourceProducts, importRuns } from "@/db/schema";
 
@@ -46,6 +46,103 @@ function collectImageUrls(row: CsvRow): string[] {
   return urls;
 }
 
+// Felder, die beim Re-Import NICHT überschrieben werden - ein bereits ausgewählter/
+// veröffentlichter Artikel behält seinen Pipeline-Status und die Shopify-Zuordnung,
+// nur die Stammdaten aus der Quelle werden aktualisiert.
+const PRESERVE_ON_CONFLICT = new Set([
+  "id",
+  "modellErweitert",
+  "status",
+  "shopifyProductId",
+  "sentToPipelineAt",
+  "createdAt",
+]);
+
+function conflictUpdateSet() {
+  const columns = getTableColumns(sourceProducts);
+  const set: Record<string, ReturnType<typeof sql.raw>> = {};
+  for (const [key, col] of Object.entries(columns)) {
+    if (PRESERVE_ON_CONFLICT.has(key)) continue;
+    set[key] = sql.raw(`excluded.${col.name}`);
+  }
+  return set;
+}
+
+type ParsedRow = {
+  rowNumber: number;
+  modellErweitert: string;
+  values: typeof sourceProducts.$inferInsert;
+};
+
+function parseRow(row: CsvRow, rowNumber: number): ParsedRow | { rowNumber: number; error: string } {
+  const modellErweitert = toNullableString(row["Modell_Erweitert"]);
+  if (!modellErweitert) {
+    return { rowNumber, error: "Modell_Erweitert fehlt, übersprungen." };
+  }
+
+  const beschaffenheit = toNullableString(row["Beschaffenheit"]);
+
+  const values: typeof sourceProducts.$inferInsert = {
+    modellErweitert,
+    modell: toNullableString(row["Modell"]),
+    lieferantenArtikelNr: toNullableString(row["Lieferanten-ArtikelNr"]),
+    eanCode: toNullableString(row["EAN-Code"]),
+
+    kurzBezeichnungDe: toNullableString(row["Kurz Artikelbezeichnung"]),
+    langBezeichnungDe: toNullableString(row["Lang Artikelbezeichnung"]),
+    kurzBezeichnungEn: toNullableString(row["Englisch Kurz Artikelbezeichnung"]),
+    langBezeichnungEn: toNullableString(row["Englisch Lang Artikelbezeichnung"]),
+
+    hauptkategorie: toNullableString(row["Hauptkategorie"]),
+    kategorieEbene1: toNullableString(row["Kategorie_Ebene1"]),
+    kategorieEbene2: toNullableString(row["Kategorie_Ebene2"]),
+    kategorieEbene3: toNullableString(row["Kategorie_Ebene3"]),
+
+    hauptmaterial: toNullableString(row["Hauptmaterial"]),
+    legierung: toNullableString(row["Legierung"]),
+    legierungsgewicht: toNumber(row["Legierungsgewicht"]),
+
+    caratur: toNumber(row["Caratur"]),
+    anzahlSteine: toInt(row["Anzahl Steine"]),
+    diamantSchliffguete: toNullableString(row["Diamant-Schliffgüte"]),
+    diamantFarbe: toNullableString(row["Diamant Farbe"]),
+    diamantReinheit: toNullableString(row["Diamant-Reinheit"]),
+
+    caraturFarbstein: toNumber(row["Caratur_Farbstein"]),
+    anzahlSteineFarbstein: toInt(row["Anzahl_Steine_Farbstein"]),
+
+    einkaufspreis: toNumber(row["Einkaufspreis"]),
+    einkaufspreisWaehrung: toNullableString(row["Währung"]),
+    uvp: toNumber(row["UVP"]),
+    uvpWaehrung: toNullableString(row["Währung UVP"]),
+
+    bestand: toInt(row["Bestand"]),
+    ringgroesse: toNullableString(row["Ringgröße"]),
+    hoehe: toNumber(row["Höhe"]),
+    breite: toNumber(row["Breite"]),
+    durchmesser: toNumber(row["Durchmesser"]),
+    staerke: toNumber(row["Stärke"]),
+    produktLaengeCm: toNumber(row["Produkt-Länge in cm"]),
+
+    freistellerUrl: toNullableString(row["Freisteller"]),
+    modelbildUrl: toNullableString(row["Modelbild"]),
+    bildUrls: collectImageUrls(row),
+
+    beschaffenheit,
+    giaZertifikatNr: extractGiaNumber(beschaffenheit),
+
+    liefertermin: toNullableString(row["Liefertermin"]),
+    angelegt: toNullableString(row["angelegt"]),
+    geaendert: toNullableString(row["geändert"]),
+    aehnlicheArtikel: toNullableString(row["Ähnliche_Artikel"]),
+
+    rawJson: row,
+    updatedAt: new Date(),
+  };
+
+  return { rowNumber, modellErweitert, values };
+}
+
 export type ImportResult = {
   runId: number;
   rowsTotal: number;
@@ -54,6 +151,8 @@ export type ImportResult = {
   rowsError: number;
   errors: string[];
 };
+
+const BATCH_SIZE = 100;
 
 export async function importCsvBuffer(
   buffer: Buffer,
@@ -74,110 +173,72 @@ export async function importCsvBuffer(
     .values({ filename, rowsTotal: rows.length, status: "running" })
     .returning({ id: importRuns.id });
 
+  const errors: string[] = [];
+  // Map statt Array: mehrere Zeilen mit demselben Modell_Erweitert kommen in der Quelle vor
+  // (z.B. Varianten-Exporte) - Postgres' ON CONFLICT DO UPDATE kann pro Batch-Insert denselben
+  // Konfliktschlüssel nicht zweimal behandeln, daher gewinnt die letzte Zeile pro SKU im File.
+  const parsedByModell = new Map<string, ParsedRow>();
+
+  rows.forEach((row, index) => {
+    const parsed = parseRow(row, index + 2);
+    if ("error" in parsed) {
+      errors.push(`Zeile ${parsed.rowNumber}: ${parsed.error}`);
+    } else {
+      parsedByModell.set(parsed.modellErweitert, parsed);
+    }
+  });
+
+  const parsedRows = Array.from(parsedByModell.values());
+
+  const existingSkus = new Set(
+    (await db.select({ modellErweitert: sourceProducts.modellErweitert }).from(sourceProducts)).map(
+      (r) => r.modellErweitert,
+    ),
+  );
+
   let inserted = 0;
   let updated = 0;
-  let errored = 0;
-  const errors: string[] = [];
+  let errored = errors.length;
+  const conflictSet = conflictUpdateSet();
+  const totalBatches = Math.ceil(parsedRows.length / BATCH_SIZE);
 
-  for (const [index, row] of rows.entries()) {
+  for (let i = 0; i < parsedRows.length; i += BATCH_SIZE) {
+    const batch = parsedRows.slice(i, i + BATCH_SIZE);
+    const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
     try {
-      const modellErweitert = toNullableString(row["Modell_Erweitert"]);
-      if (!modellErweitert) {
-        errored++;
-        errors.push(`Zeile ${index + 2}: Modell_Erweitert fehlt, übersprungen.`);
-        continue;
-      }
+      await db
+        .insert(sourceProducts)
+        .values(batch.map((r) => r.values))
+        .onConflictDoUpdate({ target: sourceProducts.modellErweitert, set: conflictSet });
 
-      const beschaffenheit = toNullableString(row["Beschaffenheit"]);
-
-      const values = {
-        modellErweitert,
-        modell: toNullableString(row["Modell"]),
-        lieferantenArtikelNr: toNullableString(row["Lieferanten-ArtikelNr"]),
-        eanCode: toNullableString(row["EAN-Code"]),
-
-        kurzBezeichnungDe: toNullableString(row["Kurz Artikelbezeichnung"]),
-        langBezeichnungDe: toNullableString(row["Lang Artikelbezeichnung"]),
-        kurzBezeichnungEn: toNullableString(row["Englisch Kurz Artikelbezeichnung"]),
-        langBezeichnungEn: toNullableString(row["Englisch Lang Artikelbezeichnung"]),
-
-        hauptkategorie: toNullableString(row["Hauptkategorie"]),
-        kategorieEbene1: toNullableString(row["Kategorie_Ebene1"]),
-        kategorieEbene2: toNullableString(row["Kategorie_Ebene2"]),
-        kategorieEbene3: toNullableString(row["Kategorie_Ebene3"]),
-
-        hauptmaterial: toNullableString(row["Hauptmaterial"]),
-        legierung: toNullableString(row["Legierung"]),
-        legierungsgewicht: toNumber(row["Legierungsgewicht"]),
-
-        caratur: toNumber(row["Caratur"]),
-        anzahlSteine: toInt(row["Anzahl Steine"]),
-        diamantSchliffguete: toNullableString(row["Diamant-Schliffgüte"]),
-        diamantFarbe: toNullableString(row["Diamant Farbe"]),
-        diamantReinheit: toNullableString(row["Diamant-Reinheit"]),
-
-        caraturFarbstein: toNumber(row["Caratur_Farbstein"]),
-        anzahlSteineFarbstein: toInt(row["Anzahl_Steine_Farbstein"]),
-
-        einkaufspreis: toNumber(row["Einkaufspreis"]),
-        einkaufspreisWaehrung: toNullableString(row["Währung"]),
-        uvp: toNumber(row["UVP"]),
-        uvpWaehrung: toNullableString(row["Währung UVP"]),
-
-        bestand: toInt(row["Bestand"]),
-        ringgroesse: toNullableString(row["Ringgröße"]),
-        hoehe: toNumber(row["Höhe"]),
-        breite: toNumber(row["Breite"]),
-        durchmesser: toNumber(row["Durchmesser"]),
-        staerke: toNumber(row["Stärke"]),
-        produktLaengeCm: toNumber(row["Produkt-Länge in cm"]),
-
-        freistellerUrl: toNullableString(row["Freisteller"]),
-        modelbildUrl: toNullableString(row["Modelbild"]),
-        bildUrls: collectImageUrls(row),
-
-        beschaffenheit,
-        giaZertifikatNr: extractGiaNumber(beschaffenheit),
-
-        liefertermin: toNullableString(row["Liefertermin"]),
-        angelegt: toNullableString(row["angelegt"]),
-        geaendert: toNullableString(row["geändert"]),
-        aehnlicheArtikel: toNullableString(row["Ähnliche_Artikel"]),
-
-        rawJson: row,
-        updatedAt: sql`(current_timestamp)`,
-      };
-
-      const existing = await db.query.sourceProducts.findFirst({
-        where: eq(sourceProducts.modellErweitert, modellErweitert),
-        columns: { id: true },
-      });
-
-      if (existing) {
-        await db
-          .update(sourceProducts)
-          .set(values)
-          .where(eq(sourceProducts.modellErweitert, modellErweitert));
-        updated++;
-      } else {
-        await db.insert(sourceProducts).values(values);
-        inserted++;
+      for (const r of batch) {
+        if (existingSkus.has(r.modellErweitert)) {
+          updated++;
+        } else {
+          inserted++;
+          existingSkus.add(r.modellErweitert);
+        }
       }
     } catch (err) {
-      errored++;
-      errors.push(`Zeile ${index + 2}: ${err instanceof Error ? err.message : String(err)}`);
+      errored += batch.length;
+      const cause = err instanceof Error && err.cause instanceof Error ? err.cause : null;
+      const message = cause ? cause.message : err instanceof Error ? err.message : String(err);
+      console.error(`[csv-import] Batch ${batchNumber}/${totalBatches} fehlgeschlagen: ${message}`);
+      errors.push(
+        `Zeilen ${batch[0].rowNumber}-${batch[batch.length - 1].rowNumber}: Batch fehlgeschlagen (${message}).`,
+      );
     }
   }
 
   await db
     .update(importRuns)
     .set({
-      finishedAt: sql`(current_timestamp)`,
+      finishedAt: new Date(),
       rowsInserted: inserted,
       rowsUpdated: updated,
       rowsError: errored,
       status: "success",
-      errorMessage: errors.length > 0 ? errors.slice(0, 50).join("\n") : null,
+      errorMessage: errors.length > 0 ? errors.slice(0, 50).join("\n").slice(0, 10_000) : null,
     })
     .where(eq(importRuns.id, run.id));
 

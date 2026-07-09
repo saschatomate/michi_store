@@ -3,6 +3,7 @@ import { ne, desc } from "drizzle-orm";
 import { db } from "@/db/client";
 import { sourceProducts } from "@/db/schema";
 import { StatusBadge } from "@/components/StatusBadge";
+import { formatDateTime } from "@/lib/format";
 
 export default async function MappingPage() {
   const rows = await db
@@ -62,7 +63,7 @@ export default async function MappingPage() {
                   <StatusBadge status={r.status} />
                 </td>
                 <td className="px-4 py-2 text-neutral-500">{r.shopifyProductId ?? "–"}</td>
-                <td className="px-4 py-2 text-neutral-500">{r.updatedAt}</td>
+                <td className="px-4 py-2 text-neutral-500">{formatDateTime(r.updatedAt)}</td>
               </tr>
             ))}
           </tbody>

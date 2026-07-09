@@ -22,6 +22,9 @@ async function main() {
     console.log("Erste Fehler:");
     result.errors.slice(0, 10).forEach((e) => console.log(`  - ${e}`));
   }
+
+  // Der postgres.js Connection-Pool haelt den Prozess sonst offen.
+  process.exit(0);
 }
 
 main().catch((err) => {

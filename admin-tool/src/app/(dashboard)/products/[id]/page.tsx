@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { sourceProducts } from "@/db/schema";
 import { StatusSelect } from "@/components/StatusSelect";
+import { formatDateTime } from "@/lib/format";
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (value === null || value === undefined || value === "") return null;
@@ -136,8 +137,8 @@ export default async function ProductDetailPage({
             <Field label="Lieferanten-ArtikelNr" value={product.lieferantenArtikelNr} />
             <Field label="Ähnliche Artikel" value={product.aehnlicheArtikel} />
             <Field label="Shopify Product ID" value={product.shopifyProductId} />
-            <Field label="An Pipeline gesendet" value={product.sentToPipelineAt} />
-            <Field label="Zuletzt aktualisiert" value={product.updatedAt} />
+            <Field label="An Pipeline gesendet" value={formatDateTime(product.sentToPipelineAt)} />
+            <Field label="Zuletzt aktualisiert" value={formatDateTime(product.updatedAt)} />
           </dl>
         </section>
 
