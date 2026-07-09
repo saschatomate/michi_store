@@ -1,0 +1,70 @@
+CREATE TABLE `import_runs` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`filename` text NOT NULL,
+	`started_at` text DEFAULT (current_timestamp) NOT NULL,
+	`finished_at` text,
+	`rows_total` integer DEFAULT 0 NOT NULL,
+	`rows_inserted` integer DEFAULT 0 NOT NULL,
+	`rows_updated` integer DEFAULT 0 NOT NULL,
+	`rows_error` integer DEFAULT 0 NOT NULL,
+	`status` text DEFAULT 'running' NOT NULL,
+	`error_message` text
+);
+--> statement-breakpoint
+CREATE TABLE `source_products` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`modell_erweitert` text NOT NULL,
+	`modell` text,
+	`lieferanten_artikel_nr` text,
+	`ean_code` text,
+	`kurz_bezeichnung_de` text,
+	`lang_bezeichnung_de` text,
+	`kurz_bezeichnung_en` text,
+	`lang_bezeichnung_en` text,
+	`hauptkategorie` text,
+	`kategorie_ebene1` text,
+	`kategorie_ebene2` text,
+	`kategorie_ebene3` text,
+	`hauptmaterial` text,
+	`legierung` text,
+	`legierungsgewicht` real,
+	`caratur` real,
+	`anzahl_steine` integer,
+	`diamant_schliffguete` text,
+	`diamant_farbe` text,
+	`diamant_reinheit` text,
+	`caratur_farbstein` real,
+	`anzahl_steine_farbstein` integer,
+	`einkaufspreis` real,
+	`einkaufspreis_waehrung` text,
+	`uvp` real,
+	`uvp_waehrung` text,
+	`bestand` integer,
+	`ringgroesse` text,
+	`hoehe` real,
+	`breite` real,
+	`durchmesser` real,
+	`staerke` real,
+	`produkt_laenge_cm` real,
+	`freisteller_url` text,
+	`modelbild_url` text,
+	`bild_urls` text,
+	`beschaffenheit` text,
+	`gia_zertifikat_nr` text,
+	`liefertermin` text,
+	`angelegt` text,
+	`geaendert` text,
+	`aehnliche_artikel` text,
+	`raw_json` text,
+	`status` text DEFAULT 'neu' NOT NULL,
+	`shopify_product_id` text,
+	`sent_to_pipeline_at` text,
+	`created_at` text DEFAULT (current_timestamp) NOT NULL,
+	`updated_at` text DEFAULT (current_timestamp) NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `source_products_modell_erweitert_unique` ON `source_products` (`modell_erweitert`);--> statement-breakpoint
+CREATE INDEX `status_idx` ON `source_products` (`status`);--> statement-breakpoint
+CREATE INDEX `kategorie_ebene1_idx` ON `source_products` (`kategorie_ebene1`);--> statement-breakpoint
+CREATE INDEX `hauptmaterial_idx` ON `source_products` (`hauptmaterial`);--> statement-breakpoint
+CREATE INDEX `bestand_idx` ON `source_products` (`bestand`);
