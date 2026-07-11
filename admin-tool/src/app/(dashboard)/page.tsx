@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { desc, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { sourceProducts } from "@/db/schema";
@@ -74,10 +75,10 @@ export default async function ProductListPage({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div>
-        <h1 className="text-lg font-semibold text-neutral-900">Produkte</h1>
-        <p className="text-sm text-neutral-500">{count} Artikel gefunden.</p>
+        <h1 className="font-display text-3xl font-semibold text-zinc-900">Produkte</h1>
+        <p className="mt-0.5 text-sm text-zinc-500">{count.toLocaleString("de-DE")} Artikel gefunden.</p>
       </div>
 
       <FilterBar filters={filters} />
@@ -85,21 +86,23 @@ export default async function ProductListPage({
       <ProductTable products={products} />
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 text-sm">
+        <div className="flex items-center justify-center gap-1 text-sm">
           <Link
             href={pageHref(Math.max(1, filters.page - 1))}
-            className={`rounded-md px-3 py-1.5 ${filters.page <= 1 ? "pointer-events-none text-neutral-300" : "text-neutral-600 hover:bg-neutral-100"}`}
+            className={`flex items-center gap-1 rounded-md px-3 py-1.5 font-medium ${filters.page <= 1 ? "pointer-events-none text-zinc-300" : "text-zinc-600 hover:bg-zinc-100"}`}
           >
+            <ChevronLeft size={15} />
             Zurück
           </Link>
-          <span className="text-neutral-500">
+          <span className="px-3 text-zinc-500">
             Seite {filters.page} von {totalPages}
           </span>
           <Link
             href={pageHref(Math.min(totalPages, filters.page + 1))}
-            className={`rounded-md px-3 py-1.5 ${filters.page >= totalPages ? "pointer-events-none text-neutral-300" : "text-neutral-600 hover:bg-neutral-100"}`}
+            className={`flex items-center gap-1 rounded-md px-3 py-1.5 font-medium ${filters.page >= totalPages ? "pointer-events-none text-zinc-300" : "text-zinc-600 hover:bg-zinc-100"}`}
           >
             Weiter
+            <ChevronRight size={15} />
           </Link>
         </div>
       )}

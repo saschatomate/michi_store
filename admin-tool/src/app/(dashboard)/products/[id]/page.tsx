@@ -1,19 +1,34 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { eq } from "drizzle-orm";
+import { ArrowLeft, BadgeCheck, Box, Gem, Sparkles, Wallet } from "lucide-react";
 import { db } from "@/db/client";
 import { sourceProducts } from "@/db/schema";
 import { StatusSelect } from "@/components/StatusSelect";
+import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { formatDateTime } from "@/lib/format";
+import { cardClass } from "@/lib/ui";
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (value === null || value === undefined || value === "") return null;
   return (
     <div>
-      <dt className="text-xs text-neutral-500">{label}</dt>
-      <dd className="text-sm text-neutral-900">{value}</dd>
+      <dt className="text-xs text-zinc-500">{label}</dt>
+      <dd className="text-sm text-zinc-900">{value}</dd>
     </div>
   );
 }
+
+function SectionHeader({ icon: Icon, title }: { icon: React.ComponentType<{ size?: number }>; title: string }) {
+  return (
+    <div className="mb-3 flex items-center gap-2 text-zinc-900">
+      <Icon size={15} />
+      <h2 className="text-sm font-semibold">{title}</h2>
+    </div>
+  );
+}
+
+const subTh = "py-1.5 pr-3 font-medium";
 
 function diamondSlots(raw: Record<string, string>) {
   const slots = [];
@@ -74,17 +89,26 @@ export default async function ProductDetailPage({
   ].filter((u): u is string => Boolean(u));
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
+    <div className="space-y-5">
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900"
+      >
+        <ArrowLeft size={14} />
+        Zurück zur Übersicht
+      </Link>
+
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-lg font-semibold text-neutral-900">
+          <h1 className="font-display text-3xl font-semibold text-zinc-900">
             {product.kurzBezeichnungDe ?? product.modellErweitert}
           </h1>
-          <p className="text-sm text-neutral-500">
-            Modell_Erweitert: <span className="font-mono">{product.modellErweitert}</span>
+          <p className="mt-1 text-sm text-zinc-500">
+            Modell_Erweitert: <span className="font-mono text-zinc-700">{product.modellErweitert}</span>
           </p>
           {product.giaZertifikatNr && (
-            <span className="mt-2 inline-flex items-center rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700">
+            <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
+              <BadgeCheck size={13} />
               GIA-Zertifikat: {product.giaZertifikatNr}
             </span>
           )}
@@ -92,23 +116,11 @@ export default async function ProductDetailPage({
         <StatusSelect id={product.id} status={product.status} />
       </div>
 
-      {images.length > 0 && (
-        <div className="flex flex-wrap gap-3 rounded-lg border border-neutral-200 bg-white p-4">
-          {images.map((url, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={i}
-              src={url}
-              alt=""
-              className={i === 0 ? "h-48 w-48 rounded object-cover" : "h-24 w-24 rounded object-cover"}
-            />
-          ))}
-        </div>
-      )}
+      <ProductImageGallery images={images} />
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <section className="rounded-lg border border-neutral-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-medium text-neutral-900">Grunddaten</h2>
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+        <section className={`${cardClass} p-4`}>
+          <SectionHeader icon={Box} title="Grunddaten" />
           <dl className="grid grid-cols-2 gap-3">
             <Field label="Hauptkategorie" value={product.hauptkategorie} />
             <Field label="Kategorie 1" value={product.kategorieEbene1} />
@@ -126,8 +138,8 @@ export default async function ProductDetailPage({
           </dl>
         </section>
 
-        <section className="rounded-lg border border-neutral-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-medium text-neutral-900">Preise, Bestand & Verlauf</h2>
+        <section className={`${cardClass} p-4`}>
+          <SectionHeader icon={Wallet} title="Preise, Bestand & Verlauf" />
           <dl className="grid grid-cols-2 gap-3">
             <Field label="Einkaufspreis" value={product.einkaufspreis ? `${product.einkaufspreis} ${product.einkaufspreisWaehrung ?? ""}` : null} />
             <Field label="UVP" value={product.uvp ? `${product.uvp} ${product.uvpWaehrung ?? ""}` : null} />
@@ -142,8 +154,8 @@ export default async function ProductDetailPage({
           </dl>
         </section>
 
-        <section className="rounded-lg border border-neutral-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-medium text-neutral-900">Diamant (Übersicht)</h2>
+        <section className={`${cardClass} p-4`}>
+          <SectionHeader icon={Gem} title="Diamant (Übersicht)" />
           <dl className="grid grid-cols-2 gap-3">
             <Field label="Caratur" value={product.caratur} />
             <Field label="Anzahl Steine" value={product.anzahlSteine} />
@@ -155,26 +167,26 @@ export default async function ProductDetailPage({
           {diamonds.length > 0 && (
             <table className="mt-4 w-full text-xs">
               <thead>
-                <tr className="border-b border-neutral-100 text-left text-neutral-500">
-                  <th className="py-1 pr-2">Slot</th>
-                  <th className="py-1 pr-2">Art</th>
-                  <th className="py-1 pr-2">Anzahl</th>
-                  <th className="py-1 pr-2">Carat</th>
-                  <th className="py-1 pr-2">Farbe</th>
-                  <th className="py-1 pr-2">Reinheit</th>
-                  <th className="py-1 pr-2">Schliff</th>
+                <tr className="border-b border-zinc-200 text-left uppercase tracking-wide text-zinc-500">
+                  <th className={subTh}>Slot</th>
+                  <th className={subTh}>Art</th>
+                  <th className={subTh}>Anzahl</th>
+                  <th className={subTh}>Carat</th>
+                  <th className={subTh}>Farbe</th>
+                  <th className={subTh}>Reinheit</th>
+                  <th className={subTh}>Schliff</th>
                 </tr>
               </thead>
               <tbody>
                 {diamonds.map((d) => (
-                  <tr key={d.slot} className="border-b border-neutral-50 last:border-0">
-                    <td className="py-1 pr-2">{d.slot}</td>
-                    <td className="py-1 pr-2">{d.art}</td>
-                    <td className="py-1 pr-2">{d.anzahl}</td>
-                    <td className="py-1 pr-2">{d.carat}</td>
-                    <td className="py-1 pr-2">{d.farbe}</td>
-                    <td className="py-1 pr-2">{d.reinheit}</td>
-                    <td className="py-1 pr-2">{d.schliff}</td>
+                  <tr key={d.slot} className="border-b border-zinc-50 last:border-0">
+                    <td className="py-1.5 pr-3 text-zinc-500">{d.slot}</td>
+                    <td className="py-1.5 pr-3 text-zinc-900">{d.art}</td>
+                    <td className="py-1.5 pr-3 text-zinc-900">{d.anzahl}</td>
+                    <td className="py-1.5 pr-3 text-zinc-900">{d.carat}</td>
+                    <td className="py-1.5 pr-3 text-zinc-900">{d.farbe}</td>
+                    <td className="py-1.5 pr-3 text-zinc-900">{d.reinheit}</td>
+                    <td className="py-1.5 pr-3 text-zinc-900">{d.schliff}</td>
                   </tr>
                 ))}
               </tbody>
@@ -183,8 +195,8 @@ export default async function ProductDetailPage({
         </section>
 
         {(coloredStones.length > 0 || product.caraturFarbstein) && (
-          <section className="rounded-lg border border-neutral-200 bg-white p-4">
-            <h2 className="mb-3 text-sm font-medium text-neutral-900">Farbstein (Übersicht)</h2>
+          <section className={`${cardClass} p-4`}>
+            <SectionHeader icon={Sparkles} title="Farbstein (Übersicht)" />
             <dl className="grid grid-cols-2 gap-3">
               <Field label="Caratur" value={product.caraturFarbstein} />
               <Field label="Anzahl Steine" value={product.anzahlSteineFarbstein} />
@@ -193,24 +205,24 @@ export default async function ProductDetailPage({
             {coloredStones.length > 0 && (
               <table className="mt-4 w-full text-xs">
                 <thead>
-                  <tr className="border-b border-neutral-100 text-left text-neutral-500">
-                    <th className="py-1 pr-2">Slot</th>
-                    <th className="py-1 pr-2">Art</th>
-                    <th className="py-1 pr-2">Anzahl</th>
-                    <th className="py-1 pr-2">Carat</th>
-                    <th className="py-1 pr-2">Farbe</th>
-                    <th className="py-1 pr-2">Schliff</th>
+                  <tr className="border-b border-zinc-200 text-left uppercase tracking-wide text-zinc-500">
+                    <th className={subTh}>Slot</th>
+                    <th className={subTh}>Art</th>
+                    <th className={subTh}>Anzahl</th>
+                    <th className={subTh}>Carat</th>
+                    <th className={subTh}>Farbe</th>
+                    <th className={subTh}>Schliff</th>
                   </tr>
                 </thead>
                 <tbody>
                   {coloredStones.map((c) => (
-                    <tr key={c.slot} className="border-b border-neutral-50 last:border-0">
-                      <td className="py-1 pr-2">{c.slot}</td>
-                      <td className="py-1 pr-2">{c.art}</td>
-                      <td className="py-1 pr-2">{c.anzahl}</td>
-                      <td className="py-1 pr-2">{c.carat}</td>
-                      <td className="py-1 pr-2">{c.farbe}</td>
-                      <td className="py-1 pr-2">{c.schliff}</td>
+                    <tr key={c.slot} className="border-b border-zinc-50 last:border-0">
+                      <td className="py-1.5 pr-3 text-zinc-500">{c.slot}</td>
+                      <td className="py-1.5 pr-3 text-zinc-900">{c.art}</td>
+                      <td className="py-1.5 pr-3 text-zinc-900">{c.anzahl}</td>
+                      <td className="py-1.5 pr-3 text-zinc-900">{c.carat}</td>
+                      <td className="py-1.5 pr-3 text-zinc-900">{c.farbe}</td>
+                      <td className="py-1.5 pr-3 text-zinc-900">{c.schliff}</td>
                     </tr>
                   ))}
                 </tbody>
