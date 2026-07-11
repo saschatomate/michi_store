@@ -89,6 +89,19 @@ export const sourceProducts = pgTable(
     shopifyProductId: text("shopify_product_id"),
     sentToPipelineAt: timestamp("sent_to_pipeline_at", { withTimezone: true }),
 
+    // KI-generierte Texte (Komponente B, Teil 1) - nur aus strukturierten Feldern generiert,
+    // nie aus langBezeichnungDe, um Faktenfehler bei Diamant-/Farbstein-Details zu vermeiden
+    genProductNameDe: text("gen_product_name_de"),
+    genShortDescDe: text("gen_short_desc_de"),
+    genLongDescDe: text("gen_long_desc_de"),
+    genShortDescEn: text("gen_short_desc_en"),
+    genLongDescEn: text("gen_long_desc_en"),
+    genSeoTitle: text("gen_seo_title"),
+    genSeoDescription: text("gen_seo_description"),
+    contentGeneratedAt: timestamp("content_generated_at", { withTimezone: true }),
+    contentApprovedAt: timestamp("content_approved_at", { withTimezone: true }),
+    contentGenerationError: text("content_generation_error"),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -98,6 +111,32 @@ export const sourceProducts = pgTable(
     index("hauptmaterial_idx").on(table.hauptmaterial),
     index("bestand_idx").on(table.bestand),
   ],
+);
+
+export const IMAGE_STATUS_VALUES = ["pending_review", "approved", "rejected"] as const;
+export type GeneratedImageStatus = (typeof IMAGE_STATUS_VALUES)[number];
+
+// KI-generierte Produktbilder (Komponente B, Teil 2) - Referenzfoto (freistellerUrl) wird als
+// echtes Bild an die Bild-API übergeben, nie frei generiert, um das Aussehen des Stücks nicht zu
+// erfinden. 3 Varianten pro Lauf (unterschiedliche Hand-/Hautton-Presets), je eigener Freigabe-Status.
+export const productGeneratedImages = pgTable(
+  "product_generated_images",
+  {
+    id: serial("id").primaryKey(),
+    sourceProductId: integer("source_product_id")
+      .notNull()
+      .references(() => sourceProducts.id),
+    variantIndex: integer("variant_index").notNull(),
+    handPreset: text("hand_preset").notNull(),
+    imageUrl: text("image_url"),
+    storagePath: text("storage_path"),
+    status: text("status").$type<GeneratedImageStatus>().notNull().default("pending_review"),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    generatedAt: timestamp("generated_at", { withTimezone: true }),
+    generationError: text("generation_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("product_generated_images_product_idx").on(table.sourceProductId)],
 );
 
 export const importRuns = pgTable("import_runs", {

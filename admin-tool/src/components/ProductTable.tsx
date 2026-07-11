@@ -32,6 +32,7 @@ function formatPrice(value: number | null, currency: string | null) {
 }
 
 const thClass = "px-3 py-2.5 font-medium";
+const MAX_BATCH_SIZE = 20;
 
 export function ProductTable({ products }: { products: ProductListItem[] }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -66,7 +67,7 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
     const ids = Array.from(selected);
     startTransition(async () => {
       const result = await sendSelectedToPipeline(ids);
-      setFeedback(`${result.sent} Artikel in Pipeline gesendet.`);
+      setFeedback(`${result.sent} Artikel in Pipeline gesendet, Texte generiert.`);
       setSelected(new Set());
     });
   }
@@ -89,10 +90,17 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
       )}
       {selected.size > 0 && (
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-indigo-100 bg-indigo-50 px-4 py-2.5">
-          <span className="text-sm font-medium text-indigo-900">{selected.size} ausgewählt</span>
+          <span className="text-sm font-medium text-indigo-900">
+            {selected.size} ausgewählt
+            {selected.size > MAX_BATCH_SIZE && (
+              <span className="ml-2 font-normal text-amber-700">
+                — maximal {MAX_BATCH_SIZE} auf einmal, bitte Auswahl reduzieren
+              </span>
+            )}
+          </span>
           <button
             onClick={sendToPipeline}
-            disabled={isPending}
+            disabled={isPending || selected.size > MAX_BATCH_SIZE}
             className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Send size={14} />

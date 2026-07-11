@@ -3,11 +3,14 @@ import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { ArrowLeft, BadgeCheck, Box, Gem, Sparkles, Wallet } from "lucide-react";
 import { db } from "@/db/client";
-import { sourceProducts } from "@/db/schema";
+import { sourceProducts, productGeneratedImages } from "@/db/schema";
 import { StatusSelect } from "@/components/StatusSelect";
 import { ProductImageGallery } from "@/components/ProductImageGallery";
+import { GeneratedContentSection } from "@/components/GeneratedContentSection";
+import { GeneratedImagesSection } from "@/components/GeneratedImagesSection";
 import { formatDateTime } from "@/lib/format";
 import { cardClass } from "@/lib/ui";
+import { diamondSlots, coloredStoneSlots } from "@/lib/product-facts";
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (value === null || value === undefined || value === "") return null;
@@ -30,41 +33,6 @@ function SectionHeader({ icon: Icon, title }: { icon: React.ComponentType<{ size
 
 const subTh = "py-1.5 pr-3 font-medium";
 
-function diamondSlots(raw: Record<string, string>) {
-  const slots = [];
-  for (let i = 1; i <= 8; i++) {
-    const art = raw[`Diamant${i}_Art`]?.trim();
-    if (!art) continue;
-    slots.push({
-      slot: i,
-      art,
-      anzahl: raw[`Diamant${i}_Anzahl`]?.trim(),
-      carat: raw[`Diamant${i}_Carat`]?.trim(),
-      farbe: raw[`Diamant${i}_Farbe`]?.trim(),
-      reinheit: raw[`Diamant${i}_Reinheit`]?.trim(),
-      schliff: raw[`Diamant${i}_Schliff`]?.trim(),
-    });
-  }
-  return slots;
-}
-
-function coloredStoneSlots(raw: Record<string, string>) {
-  const slots = [];
-  for (let i = 1; i <= 8; i++) {
-    const art = raw[`Farbstein${i}_Art`]?.trim();
-    if (!art) continue;
-    slots.push({
-      slot: i,
-      art,
-      anzahl: raw[`Farbstein${i}_Anzahl`]?.trim(),
-      carat: raw[`Farbstein${i}_Carat`]?.trim(),
-      farbe: raw[`Farbstein${i}_Farbe`]?.trim(),
-      schliff: raw[`Farbstein${i}_Schliff`]?.trim(),
-    });
-  }
-  return slots;
-}
-
 export default async function ProductDetailPage({
   params,
 }: {
@@ -78,6 +46,10 @@ export default async function ProductDetailPage({
     where: eq(sourceProducts.id, productId),
   });
   if (!product) notFound();
+
+  const generatedImages = await db.query.productGeneratedImages.findMany({
+    where: eq(productGeneratedImages.sourceProductId, product.id),
+  });
 
   const raw = product.rawJson ?? {};
   const diamonds = diamondSlots(raw);
@@ -231,6 +203,30 @@ export default async function ProductDetailPage({
           </section>
         )}
       </div>
+
+      {product.sentToPipelineAt && (
+        <GeneratedContentSection
+          id={product.id}
+          status={product.status}
+          isApproved={Boolean(product.contentApprovedAt)}
+          approvedAt={product.contentApprovedAt}
+          generatedAt={product.contentGeneratedAt}
+          generationError={product.contentGenerationError}
+          content={{
+            productName: product.genProductNameDe ?? "",
+            shortDescDe: product.genShortDescDe ?? "",
+            longDescDe: product.genLongDescDe ?? "",
+            shortDescEn: product.genShortDescEn ?? "",
+            longDescEn: product.genLongDescEn ?? "",
+            seoTitle: product.genSeoTitle ?? "",
+            seoDescription: product.genSeoDescription ?? "",
+          }}
+        />
+      )}
+
+      {product.sentToPipelineAt && (
+        <GeneratedImagesSection id={product.id} images={generatedImages} />
+      )}
     </div>
   );
 }

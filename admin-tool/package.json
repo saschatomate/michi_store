@@ -12,16 +12,20 @@
     "import": "tsx --env-file=.env.local src/scripts/import-cli.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
+    "@supabase/storage-js": "^2.109.0",
     "csv-parse": "^7.0.1",
     "drizzle-orm": "^0.45.2",
     "iconv-lite": "^0.7.3",
     "jose": "^6.2.3",
     "lucide-react": "^1.24.0",
     "next": "16.2.10",
+    "openai": "^6.46.0",
     "postgres": "^3.4.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "sign-ai-media": "^0.1.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
