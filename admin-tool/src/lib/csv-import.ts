@@ -48,7 +48,10 @@ function collectImageUrls(row: CsvRow): string[] {
 
 // Felder, die beim Re-Import NICHT überschrieben werden - ein bereits ausgewählter/
 // veröffentlichter Artikel behält seinen Pipeline-Status und die Shopify-Zuordnung,
-// nur die Stammdaten aus der Quelle werden aktualisiert.
+// nur die Stammdaten aus der Quelle werden aktualisiert. Enthält auch alle Komponente-B-Felder
+// (KI-Texte, KI-Bild-Prompt-Override), da diese nicht aus der CSV kommen und sonst bei jedem
+// Re-Import auf NULL zurückgesetzt würden (excluded.<spalte> ist NULL für Spalten, die nicht im
+// INSERT-Werteobjekt enthalten sind).
 const PRESERVE_ON_CONFLICT = new Set([
   "id",
   "modellErweitert",
@@ -56,6 +59,17 @@ const PRESERVE_ON_CONFLICT = new Set([
   "shopifyProductId",
   "sentToPipelineAt",
   "createdAt",
+  "genProductNameDe",
+  "genShortDescDe",
+  "genLongDescDe",
+  "genShortDescEn",
+  "genLongDescEn",
+  "genSeoTitle",
+  "genSeoDescription",
+  "contentGeneratedAt",
+  "contentApprovedAt",
+  "contentGenerationError",
+  "imagePromptOverride",
 ]);
 
 function conflictUpdateSet() {
