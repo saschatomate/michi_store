@@ -31,12 +31,20 @@ const BODY_PART_BY_HAUPTKATEGORIE: Record<string, BodyPartMapping> = {
   },
   Armbänder: {
     bodyPart: "ein Handgelenk",
-    compositionHint: "Nahaufnahme eines Handgelenks und Unterarms, Armband am Handgelenk getragen",
+    compositionHint:
+      "Nahaufnahme eines Handgelenks und Unterarms, Armband am Handgelenk getragen. Achtung: Bei " +
+      "Armbändern ist die Innen-/Außenseite im Referenzfoto oft nicht eindeutig erkennbar - behalte " +
+      "die im Referenzbild sichtbare Anordnung der Elemente exakt bei, anstatt sie zu erraten oder " +
+      "zu vertauschen",
     size: "1536x1024",
   },
   Armreifen: {
     bodyPart: "ein Handgelenk",
-    compositionHint: "Nahaufnahme eines Handgelenks und Unterarms, Armreif am Handgelenk getragen",
+    compositionHint:
+      "Nahaufnahme eines Handgelenks und Unterarms, Armreif am Handgelenk getragen. Achtung: Bei " +
+      "Armreifen ist die Innen-/Außenseite im Referenzfoto oft nicht eindeutig erkennbar - behalte " +
+      "die im Referenzbild sichtbare Anordnung der Elemente exakt bei, anstatt sie zu erraten oder " +
+      "zu vertauschen",
     size: "1536x1024",
   },
   Manschettenknöpfe: {
@@ -57,21 +65,40 @@ export type HandPreset = {
   promptDescriptor: string;
 };
 
-// Feste 3 Presets pro Generierungslauf für die geforderte Diversität (Hautton + Handform/-größe).
-export const HAND_PRESETS: HandPreset[] = [
-  {
-    key: "hell_schlank",
-    label: "Heller Hautton, schlank",
-    promptDescriptor: "eine schlanke Hand/Körperpartie mit hellem Hautton",
-  },
-  {
-    key: "mittel_standard",
-    label: "Mittlerer Hautton, durchschnittlich",
-    promptDescriptor: "eine durchschnittlich gebaute Hand/Körperpartie mit mittlerem, warmem Hautton",
-  },
-  {
-    key: "dunkel_kraeftig",
-    label: "Dunkler Hautton, kräftiger",
-    promptDescriptor: "eine kräftigere, vollere Hand/Körperpartie mit dunklem Hautton",
-  },
+// Hautton und Handform/-größe sind zwei unabhängige Achsen - werden pro Generierungslauf zufällig
+// gemischt und gepaart, damit keine feste Korrelation entsteht (z.B. "dunkler Hautton = kräftiger").
+const SKIN_TONES = [
+  { key: "hell", label: "Heller Hautton", descriptor: "hellem Hautton" },
+  { key: "mittel", label: "Mittlerer Hautton", descriptor: "mittlerem, warmem Hautton" },
+  { key: "dunkel", label: "Dunkler Hautton", descriptor: "dunklem Hautton" },
 ];
+
+const HAND_BUILDS = [
+  { key: "schlank", label: "schlank", descriptor: "eine schlanke Hand/Körperpartie" },
+  { key: "durchschnittlich", label: "durchschnittlich", descriptor: "eine durchschnittlich gebaute Hand/Körperpartie" },
+  { key: "kraeftiger", label: "kräftiger", descriptor: "eine kräftigere, vollere Hand/Körperpartie" },
+];
+
+function shuffled<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+// Erzeugt 3 Presets mit unabhängig zufällig gepaartem Hautton und Handform - bei jedem Aufruf neu
+// gemischt, auch bei "Neu generieren".
+export function randomHandPresets(): HandPreset[] {
+  const tones = shuffled(SKIN_TONES);
+  const builds = shuffled(HAND_BUILDS);
+  return tones.map((tone, i) => {
+    const build = builds[i];
+    return {
+      key: `${tone.key}_${build.key}`,
+      label: `${tone.label}, ${build.label}`,
+      promptDescriptor: `${build.descriptor} mit ${tone.descriptor}`,
+    };
+  });
+}

@@ -8,7 +8,7 @@ import { requireAuth } from "@/lib/dal";
 import { generateProductImageVariant } from "@/lib/image-generation";
 import { signGeneratedImage } from "@/lib/c2pa-sign";
 import { uploadGeneratedImage, deleteGeneratedImage } from "@/lib/image-storage";
-import { HAND_PRESETS, type HandPreset } from "@/lib/image-facts";
+import { randomHandPresets, type HandPreset } from "@/lib/image-facts";
 
 type SourceProductRow = typeof sourceProducts.$inferSelect;
 
@@ -41,7 +41,7 @@ async function generateAndSaveVariant(
       await db
         .update(productGeneratedImages)
         .set({
-          handPreset: preset.key,
+          handPreset: preset.label,
           imageUrl: url,
           storagePath: path,
           status: "pending_review",
@@ -54,7 +54,7 @@ async function generateAndSaveVariant(
       await db.insert(productGeneratedImages).values({
         sourceProductId: product.id,
         variantIndex,
-        handPreset: preset.key,
+        handPreset: preset.label,
         imageUrl: url,
         storagePath: path,
         status: "pending_review",
@@ -76,7 +76,7 @@ async function generateAndSaveVariant(
       await db.insert(productGeneratedImages).values({
         sourceProductId: product.id,
         variantIndex,
-        handPreset: preset.key,
+        handPreset: preset.label,
         status: "pending_review",
         generationError: message,
       });
@@ -91,9 +91,22 @@ export async function generateProductImages(id: number): Promise<void> {
   const product = await db.query.sourceProducts.findFirst({ where: eq(sourceProducts.id, id) });
   if (!product) throw new Error("Artikel nicht gefunden.");
 
-  await Promise.all(HAND_PRESETS.map((preset, i) => generateAndSaveVariant(product, preset, i)));
+  await Promise.all(randomHandPresets().map((preset, i) => generateAndSaveVariant(product, preset, i)));
 
   revalidatePath(`/products/${id}`);
+}
+
+// Speichert einen manuellen Prompt-Override (z.B. Korrektur für Innen-/Außenseite bei Armbändern)
+// und generiert direkt neu - ersetzt nur nicht-freigegebene Varianten, wie bei "Neu generieren".
+// Leerer String setzt den Override zurück auf den automatisch gebauten Standard-Prompt.
+export async function updateImagePromptOverride(id: number, prompt: string): Promise<void> {
+  await requireAuth();
+  await db
+    .update(sourceProducts)
+    .set({ imagePromptOverride: prompt.trim() || null, updatedAt: new Date() })
+    .where(eq(sourceProducts.id, id));
+
+  await generateProductImages(id);
 }
 
 export async function approveProductImage(imageId: number): Promise<void> {

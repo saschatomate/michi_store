@@ -11,6 +11,7 @@ import { GeneratedImagesSection } from "@/components/GeneratedImagesSection";
 import { formatDateTime } from "@/lib/format";
 import { cardClass } from "@/lib/ui";
 import { diamondSlots, coloredStoneSlots } from "@/lib/product-facts";
+import { defaultImageBasePrompt } from "@/lib/image-generation";
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (value === null || value === undefined || value === "") return null;
@@ -225,7 +226,12 @@ export default async function ProductDetailPage({
       )}
 
       {product.sentToPipelineAt && (
-        <GeneratedImagesSection id={product.id} images={generatedImages} />
+        <GeneratedImagesSection
+          id={product.id}
+          images={generatedImages}
+          defaultPrompt={defaultImageBasePrompt(product)}
+          promptOverride={product.imagePromptOverride}
+        />
       )}
     </div>
   );

@@ -9,8 +9,10 @@ const SYSTEM_INSTRUCTIONS =
   "Fotorealistisches Schmuck-Produktfoto für eine hochwertige Schmuckmarke. Studio-Beleuchtung, " +
   "neutraler, dezenter Hintergrund. Kein Text, kein Logo, kein Wasserzeichen im Bild. Kein weiterer " +
   "Schmuck außer dem abgebildeten Referenzstück sichtbar. Verändere das Schmuckstück selbst NICHT - " +
-  "Form, Fassung, Steinanzahl und Material müssen exakt wie im Referenzbild bleiben. Generiere nur " +
-  "die Körperpartie und die Umgebung drumherum.";
+  "Form, Fassung, Steinanzahl und Material müssen exakt wie im Referenzbild bleiben. Spiegle oder " +
+  "drehe das Schmuckstück NICHT - Vorderseite, Rückseite sowie Innen- und Außenseite müssen exakt " +
+  "wie im Referenzbild ausgerichtet bleiben. Generiere nur die Körperpartie und die Umgebung " +
+  "drumherum.";
 
 function referenceImageUrl(product: SourceProductRow): string | null {
   if (product.freistellerUrl) return product.freistellerUrl;
@@ -33,6 +35,17 @@ async function fetchImageBuffer(url: string): Promise<Buffer> {
   }
   const arrayBuffer = await response.arrayBuffer();
   return Buffer.from(arrayBuffer);
+}
+
+// Der Basis-Prompt (ohne Hautton-/Handform-Zusatz, der pro Variante wechselt) - wird sowohl für die
+// echte Generierung als auch zum Vorausfüllen der Prompt-Bearbeiten-Ansicht in der UI verwendet.
+export function defaultImageBasePrompt(product: SourceProductRow): string {
+  const mapping = bodyPartMapping(product.hauptkategorie);
+  if (!mapping) return "";
+  return (
+    `${SYSTEM_INSTRUCTIONS} Setze DIESES Schmuckstück (aus dem Referenzbild) unverändert auf ` +
+    `${mapping.bodyPart}. ${mapping.compositionHint}.`
+  );
 }
 
 export async function generateProductImageVariant(
@@ -59,10 +72,9 @@ export async function generateProductImageVariant(
   const referenceBuffer = await fetchImageBuffer(refUrl);
   const referenceFile = await toFile(referenceBuffer, "reference", { type: guessMimeType(refUrl) });
 
+  const basePrompt = product.imagePromptOverride?.trim() || defaultImageBasePrompt(product);
   const prompt =
-    `${SYSTEM_INSTRUCTIONS} Setze DIESES Schmuckstück (aus dem Referenzbild) unverändert auf ` +
-    `${mapping.bodyPart}. ${mapping.compositionHint}. Zeige ${preset.promptDescriptor}. Hohe Auflösung, ` +
-    `scharfer Fokus auf das Schmuckstück.`;
+    `${basePrompt} Zeige ${preset.promptDescriptor}. Hohe Auflösung, scharfer Fokus auf das Schmuckstück.`;
 
   // gpt-image-Modelle haben ein niedriges Per-Minute-Rate-Limit für Edit-Aufrufe; bei 3 parallelen
   // Varianten pro Produkt reicht das SDK-Default (2 Retries) oft nicht aus, um einen 429 mit

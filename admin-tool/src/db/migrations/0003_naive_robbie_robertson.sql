@@ -1,0 +1,1 @@
+ALTER TABLE "source_products" ADD COLUMN "image_prompt_override" text;

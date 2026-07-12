@@ -1,11 +1,15 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import Image from "next/image";
-import { AlertCircle, CheckCircle2, ImageIcon, RefreshCw, XCircle } from "lucide-react";
-import { generateProductImages, approveProductImage, rejectProductImage } from "@/lib/image-actions";
-import { buttonPrimary, buttonSecondary, buttonGhost, cardClass } from "@/lib/ui";
-import { HAND_PRESETS } from "@/lib/image-facts";
+import { AlertCircle, CheckCircle2, ImageIcon, Pencil, RefreshCw, RotateCcw, X, XCircle } from "lucide-react";
+import {
+  generateProductImages,
+  approveProductImage,
+  rejectProductImage,
+  updateImagePromptOverride,
+} from "@/lib/image-actions";
+import { buttonPrimary, buttonSecondary, buttonGhost, cardClass, inputClass } from "@/lib/ui";
 import type { GeneratedImageStatus } from "@/db/schema";
 
 export type GeneratedImageItem = {
@@ -16,10 +20,6 @@ export type GeneratedImageItem = {
   status: GeneratedImageStatus;
   generationError: string | null;
 };
-
-function presetLabel(key: string): string {
-  return HAND_PRESETS.find((p) => p.key === key)?.label ?? key;
-}
 
 const statusLabel: Record<GeneratedImageStatus, string> = {
   pending_review: "Wartet auf Freigabe",
@@ -36,7 +36,7 @@ function ImageCard({ item }: { item: GeneratedImageItem }) {
         {item.imageUrl ? (
           <Image
             src={item.imageUrl}
-            alt={presetLabel(item.handPreset)}
+            alt={item.handPreset}
             width={512}
             height={512}
             className="h-full w-full object-cover"
@@ -50,7 +50,7 @@ function ImageCard({ item }: { item: GeneratedImageItem }) {
       </div>
       <div className="space-y-2 p-3">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-medium text-zinc-700">{presetLabel(item.handPreset)}</span>
+          <span className="text-xs font-medium text-zinc-700">{item.handPreset}</span>
           <span
             className={
               item.status === "approved"
@@ -92,9 +92,42 @@ function ImageCard({ item }: { item: GeneratedImageItem }) {
   );
 }
 
-export function GeneratedImagesSection({ id, images }: { id: number; images: GeneratedImageItem[] }) {
+export function GeneratedImagesSection({
+  id,
+  images,
+  defaultPrompt,
+  promptOverride,
+}: {
+  id: number;
+  images: GeneratedImageItem[];
+  defaultPrompt: string;
+  promptOverride: string | null;
+}) {
   const [isPending, startTransition] = useTransition();
+  const [isEditingPrompt, setIsEditingPrompt] = useState(false);
+  const [draftPrompt, setDraftPrompt] = useState(promptOverride ?? defaultPrompt);
   const hasImages = images.length > 0;
+  const hasCustomPrompt = Boolean(promptOverride);
+
+  function startEditPrompt() {
+    setDraftPrompt(promptOverride ?? defaultPrompt);
+    setIsEditingPrompt(true);
+  }
+
+  function saveAndGenerate() {
+    startTransition(async () => {
+      await updateImagePromptOverride(id, draftPrompt);
+      setIsEditingPrompt(false);
+    });
+  }
+
+  function resetToDefault() {
+    startTransition(async () => {
+      await updateImagePromptOverride(id, "");
+      setDraftPrompt(defaultPrompt);
+      setIsEditingPrompt(false);
+    });
+  }
 
   return (
     <section className={`${cardClass} p-4`}>
@@ -102,18 +135,65 @@ export function GeneratedImagesSection({ id, images }: { id: number; images: Gen
         <div className="flex items-center gap-2 text-zinc-900">
           <ImageIcon size={15} />
           <h2 className="text-sm font-semibold">Generierte Bilder</h2>
+          {hasCustomPrompt && !isEditingPrompt && (
+            <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+              Individueller Prompt aktiv
+            </span>
+          )}
         </div>
-        <button
-          onClick={() => startTransition(() => generateProductImages(id))}
-          disabled={isPending}
-          className={hasImages ? buttonGhost : buttonPrimary}
-        >
-          <RefreshCw size={14} className={isPending ? "animate-spin" : ""} />
-          {isPending ? "Generiere…" : hasImages ? "Neu generieren" : "Bilder generieren"}
-        </button>
+        {!isEditingPrompt && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={startEditPrompt} disabled={isPending} className={buttonGhost}>
+              <Pencil size={14} />
+              Prompt bearbeiten
+            </button>
+            <button
+              onClick={() => startTransition(() => generateProductImages(id))}
+              disabled={isPending}
+              className={hasImages ? buttonGhost : buttonPrimary}
+            >
+              <RefreshCw size={14} className={isPending ? "animate-spin" : ""} />
+              {isPending ? "Generiere…" : hasImages ? "Neu generieren" : "Bilder generieren"}
+            </button>
+          </div>
+        )}
       </div>
 
-      {hasImages ? (
+      {isEditingPrompt ? (
+        <div className="space-y-3">
+          <label className="block">
+            <span className="mb-1 block text-xs text-zinc-500">
+              Prompt (gilt für alle Varianten, Hautton/Handform wird automatisch ergänzt)
+            </span>
+            <textarea
+              value={draftPrompt}
+              onChange={(e) => setDraftPrompt(e.target.value)}
+              rows={8}
+              className={inputClass}
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={saveAndGenerate} disabled={isPending} className={buttonPrimary}>
+              <RefreshCw size={14} className={isPending ? "animate-spin" : ""} />
+              {isPending ? "Generiere…" : "Speichern & neu generieren"}
+            </button>
+            <button
+              onClick={() => setIsEditingPrompt(false)}
+              disabled={isPending}
+              className={buttonSecondary}
+            >
+              <X size={14} />
+              Abbrechen
+            </button>
+            {hasCustomPrompt && (
+              <button onClick={resetToDefault} disabled={isPending} className={buttonGhost}>
+                <RotateCcw size={14} />
+                Auf Standard zurücksetzen
+              </button>
+            )}
+          </div>
+        </div>
+      ) : hasImages ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {images
             .slice()

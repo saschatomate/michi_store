@@ -102,6 +102,10 @@ export const sourceProducts = pgTable(
     contentApprovedAt: timestamp("content_approved_at", { withTimezone: true }),
     contentGenerationError: text("content_generation_error"),
 
+    // KI-Bildgenerierung (Komponente B, Teil 2) - manueller Prompt-Override pro Produkt, falls der
+    // automatisch gebaute Prompt korrigiert werden muss (z.B. Innen-/Außenseite bei Armbändern)
+    imagePromptOverride: text("image_prompt_override"),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
