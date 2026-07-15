@@ -11,46 +11,70 @@ export type BodyPartMapping = {
 const BODY_PART_BY_HAUPTKATEGORIE: Record<string, BodyPartMapping> = {
   Ring: {
     bodyPart: "eine Hand",
-    compositionHint: "Nahaufnahme einer Hand mit dem Ring an einem Finger, Fokus auf Hand und Finger",
-    size: "1536x1024",
+    compositionHint:
+      "Extreme Nahaufnahme einer Hand nahe Schlüsselbein/Dekolleté oder frei vor neutralem " +
+      "Hintergrund, Finger elegant und entspannt positioniert, Ring scharf im Fokus, restliche " +
+      "Hand und Umgebung durch Schärfentiefe leicht weich",
+    size: "1024x1536",
   },
   Ohrschmuck: {
     bodyPart: "ein Ohr",
-    compositionHint: "Nahaufnahme eines Ohrs und der Halsseite, Schmuckstück am Ohr getragen",
+    compositionHint:
+      "Extreme Nahaufnahme von Ohr und oberem Hals, Kopf leicht seitlich gedreht, Haare aus dem " +
+      "Gesicht/vom Ohr weggehalten (zurückgebunden oder hinters Ohr gelegt), sodass der Ohrschmuck " +
+      "frei sichtbar ist, Schmuckstück scharf im Fokus, Haare und Hintergrund weich unscharf",
     size: "1024x1536",
   },
   Colliers: {
     bodyPart: "Hals und Dekolleté",
-    compositionHint: "Nahaufnahme von Hals und Dekolleté, Schmuckstück um den Hals getragen",
+    compositionHint:
+      "Enge Beauty-Nahaufnahme: unterer Gesichtsbereich (Nase/Mund, am oberen Bildrand " +
+      "angeschnitten) bis Hals und oberes Dekolleté sichtbar, Kamera nahezu frontal mit leichtem " +
+      "Winkel. Kragen oder Ausschnitt der Kleidung (z.B. Hemdkragen oder Blazer-Revers, schlicht " +
+      "und neutral in Schwarz oder Weiß) am unteren Bildrand sichtbar und Teil der Komposition. " +
+      "Schmuckstück auf der Haut liegend scharf im Fokus, alles andere leicht weich",
     size: "1024x1536",
   },
   Anhänger: {
     bodyPart: "Hals und Dekolleté",
-    compositionHint: "Nahaufnahme von Hals und Dekolleté, Anhänger an einer Kette um den Hals getragen",
+    compositionHint:
+      "Enge Beauty-Nahaufnahme: unterer Gesichtsbereich (Nase/Mund, am oberen Bildrand " +
+      "angeschnitten) bis Hals und oberes Dekolleté sichtbar, Kamera nahezu frontal mit leichtem " +
+      "Winkel. Kragen oder Ausschnitt der Kleidung (z.B. Hemdkragen oder Blazer-Revers, schlicht " +
+      "und neutral in Schwarz oder Weiß) am unteren Bildrand sichtbar und Teil der Komposition. " +
+      "Anhänger an einer Kette auf der Haut liegend scharf im Fokus, alles andere leicht weich",
     size: "1024x1536",
   },
   Armbänder: {
     bodyPart: "ein Handgelenk",
     compositionHint:
-      "Nahaufnahme eines Handgelenks und Unterarms, Armband am Handgelenk getragen. Achtung: Bei " +
+      "Extreme Nahaufnahme eines Handgelenks und Unterarms, oft in sanfter Interaktion mit der " +
+      "anderen Hand (z.B. Hände sanft übereinander oder ineinander verschränkt nahe Schlüsselbein) " +
+      "oder Unterarm hängend mit entspannt positionierten Fingern, Armband scharf im Fokus, " +
+      "restlicher Arm, zweite Hand und Hintergrund durch Schärfentiefe weich. Achtung: Bei " +
       "Armbändern ist die Innen-/Außenseite im Referenzfoto oft nicht eindeutig erkennbar - behalte " +
       "die im Referenzbild sichtbare Anordnung der Elemente exakt bei, anstatt sie zu erraten oder " +
       "zu vertauschen",
-    size: "1536x1024",
+    size: "1024x1536",
   },
   Armreifen: {
     bodyPart: "ein Handgelenk",
     compositionHint:
-      "Nahaufnahme eines Handgelenks und Unterarms, Armreif am Handgelenk getragen. Achtung: Bei " +
+      "Extreme Nahaufnahme eines Handgelenks und Unterarms, oft in sanfter Interaktion mit der " +
+      "anderen Hand (z.B. Hände sanft übereinander oder ineinander verschränkt nahe Schlüsselbein) " +
+      "oder Unterarm hängend mit entspannt positionierten Fingern, Armreif scharf im Fokus, " +
+      "restlicher Arm, zweite Hand und Hintergrund durch Schärfentiefe weich. Achtung: Bei " +
       "Armreifen ist die Innen-/Außenseite im Referenzfoto oft nicht eindeutig erkennbar - behalte " +
       "die im Referenzbild sichtbare Anordnung der Elemente exakt bei, anstatt sie zu erraten oder " +
       "zu vertauschen",
-    size: "1536x1024",
+    size: "1024x1536",
   },
   Manschettenknöpfe: {
     bodyPart: "eine Hemdmanschette am Handgelenk",
-    compositionHint: "Nahaufnahme eines Handgelenks mit Hemdmanschette, Manschettenknopf geschlossen sichtbar",
-    size: "1536x1024",
+    compositionHint:
+      "Extreme Nahaufnahme eines Handgelenks mit Hemdmanschette, Manschettenknopf geschlossen und " +
+      "scharf im Fokus, schlichter Hemdärmel, Hintergrund durch Schärfentiefe weich",
+    size: "1024x1536",
   },
 };
 

@@ -5,14 +5,24 @@ import { bodyPartMapping, type HandPreset } from "@/lib/image-facts";
 
 type SourceProductRow = typeof sourceProducts.$inferSelect;
 
+// Editorial-Luxus-Schmuckfotografie im Stil großer Schmuckhäuser wie Tiffany & Co.: extremer
+// Makro-Ausschnitt, geringe Schärfentiefe, weicher neutraler Studio-Hintergrund, nur ein kleiner
+// Bildausschnitt der Person sichtbar, kein Model-Casting-Foto.
 const SYSTEM_INSTRUCTIONS =
-  "Fotorealistisches Schmuck-Produktfoto für eine hochwertige Schmuckmarke. Studio-Beleuchtung, " +
-  "neutraler, dezenter Hintergrund. Kein Text, kein Logo, kein Wasserzeichen im Bild. Kein weiterer " +
-  "Schmuck außer dem abgebildeten Referenzstück sichtbar. Verändere das Schmuckstück selbst NICHT - " +
-  "Form, Fassung, Steinanzahl und Material müssen exakt wie im Referenzbild bleiben. Spiegle oder " +
-  "drehe das Schmuckstück NICHT - Vorderseite, Rückseite sowie Innen- und Außenseite müssen exakt " +
-  "wie im Referenzbild ausgerichtet bleiben. Generiere nur die Körperpartie und die Umgebung " +
-  "drumherum.";
+  "Editorial-Luxus-Schmuckfotografie im Stil großer Schmuckhäuser wie Tiffany & Co. Extreme " +
+  "Nahaufnahme/Makro-Bildausschnitt - das Schmuckstück scharf im Fokus, alles andere (Haare, " +
+  "Hintergrund, entferntere Hautpartien) durch geringe Schärfentiefe (Bokeh) leicht unscharf. " +
+  "Weicher, neutraler, warmgrauer Studio-Hintergrund ohne sichtbare Struktur oder Requisiten. " +
+  "Weiches, diffuses Studiolicht mit sanften Schatten, keine harten Reflexe. Nur ein kleiner, eng " +
+  "zugeschnittener Bildausschnitt der Person sichtbar, passend zur Schmuckart - kein vollständiges " +
+  "Gesicht im Bild, ruhige, unaufdringliche Ausstrahlung. Minimale, neutrale Kleidung (z.B. " +
+  "schlichtes weißes Hemd oder schwarzer Rollkragenpullover), die nicht vom Schmuckstück ablenkt. " +
+  "Natürliche, warme Hauttöne, ruhige editorial Farbgebung mit sanftem Kontrast. Kein Text, kein " +
+  "Logo, kein Wasserzeichen im Bild. Kein weiterer Schmuck außer dem abgebildeten Referenzstück " +
+  "sichtbar. Verändere das Schmuckstück selbst NICHT - Form, Fassung, Steinanzahl und Material " +
+  "müssen exakt wie im Referenzbild bleiben. Spiegle oder drehe das Schmuckstück NICHT - " +
+  "Vorderseite, Rückseite sowie Innen- und Außenseite müssen exakt wie im Referenzbild ausgerichtet " +
+  "bleiben. Generiere nur die Körperpartie und die Umgebung drumherum.";
 
 function referenceImageUrl(product: SourceProductRow): string | null {
   if (product.freistellerUrl) return product.freistellerUrl;
