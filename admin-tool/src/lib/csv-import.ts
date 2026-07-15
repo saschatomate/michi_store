@@ -70,6 +70,7 @@ const PRESERVE_ON_CONFLICT = new Set([
   "contentApprovedAt",
   "contentGenerationError",
   "imagePromptOverride",
+  "firstSeenImportRunId",
 ]);
 
 function conflictUpdateSet() {
@@ -88,7 +89,11 @@ type ParsedRow = {
   values: typeof sourceProducts.$inferInsert;
 };
 
-function parseRow(row: CsvRow, rowNumber: number): ParsedRow | { rowNumber: number; error: string } {
+function parseRow(
+  row: CsvRow,
+  rowNumber: number,
+  runId: number,
+): ParsedRow | { rowNumber: number; error: string } {
   const modellErweitert = toNullableString(row["Modell_Erweitert"]);
   if (!modellErweitert) {
     return { rowNumber, error: "Modell_Erweitert fehlt, übersprungen." };
@@ -152,6 +157,9 @@ function parseRow(row: CsvRow, rowNumber: number): ParsedRow | { rowNumber: numb
 
     rawJson: row,
     updatedAt: new Date(),
+    // Nur bei Erstanlage relevant (siehe PRESERVE_ON_CONFLICT) - bei einem bereits existierenden
+    // Artikel wird dieser Wert beim Re-Import ignoriert und der ursprüngliche Lauf bleibt erhalten.
+    firstSeenImportRunId: runId,
   };
 
   return { rowNumber, modellErweitert, values };
@@ -194,7 +202,7 @@ export async function importCsvBuffer(
   const parsedByModell = new Map<string, ParsedRow>();
 
   rows.forEach((row, index) => {
-    const parsed = parseRow(row, index + 2);
+    const parsed = parseRow(row, index + 2, run.id);
     if ("error" in parsed) {
       errors.push(`Zeile ${parsed.rowNumber}: ${parsed.error}`);
     } else {

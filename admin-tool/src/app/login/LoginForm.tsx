@@ -9,18 +9,23 @@ export function LoginForm() {
   const [state, action, pending] = useActionState(login, undefined);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-zinc-50 to-zinc-100 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[#faf8f5] via-[#f5f2ed] to-[#efe9e1] px-4">
       <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-indigo-600 font-display text-xl font-semibold text-white shadow-md shadow-indigo-600/20">
+        <div className="mb-10 flex flex-col items-center gap-3.5">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 font-display text-2xl font-semibold text-white shadow-md shadow-indigo-600/20">
             M
           </div>
-          <span className="font-display text-2xl font-semibold tracking-wide text-zinc-900">
-            Marinell Admin
-          </span>
+          <div className="flex flex-col items-center gap-1">
+            <span className="font-display text-3xl font-semibold tracking-wide text-zinc-900">
+              Marinell Admin
+            </span>
+            <span className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-400">
+              Produkt-Pipeline
+            </span>
+          </div>
         </div>
 
-        <form action={action} className="rounded-2xl border border-zinc-200/80 bg-white p-8 shadow-lg shadow-zinc-200/50">
+        <form action={action} className="rounded-2xl border border-zinc-200/80 bg-white p-8 shadow-lg shadow-zinc-300/30">
           <div className="mb-6 flex items-center gap-2 text-zinc-900">
             <Lock size={16} className="text-zinc-400" />
             <h1 className="text-sm font-semibold">Anmeldung erforderlich</h1>

@@ -13,8 +13,12 @@ const BODY_PART_BY_HAUPTKATEGORIE: Record<string, BodyPartMapping> = {
     bodyPart: "eine Hand",
     compositionHint:
       "Extreme Nahaufnahme einer Hand nahe Schlüsselbein/Dekolleté oder frei vor neutralem " +
-      "Hintergrund, Finger elegant und entspannt positioniert, Ring scharf im Fokus, restliche " +
-      "Hand und Umgebung durch Schärfentiefe leicht weich",
+      "Hintergrund. Die Hand ist offen und entspannt, die Finger sanft gestreckt und leicht " +
+      "voneinander gespreizt (NICHT zur Faust geballt, NICHT ineinander verschränkt oder stark " +
+      "gekrümmt) - jeder Finger muss klar einzeln erkennbar sein, ohne dass sich benachbarte " +
+      "Finger berühren oder überlappen. Der Ringfinger, auf dem der Ring sitzt, ist deutlich von " +
+      "den Nachbarfingern abgesetzt sichtbar. Ring scharf im Fokus, restliche Hand und Umgebung " +
+      "durch Schärfentiefe leicht weich",
     size: "1024x1536",
   },
   Ohrschmuck: {

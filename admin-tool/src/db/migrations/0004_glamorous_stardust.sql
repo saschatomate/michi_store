@@ -1,0 +1,3 @@
+ALTER TABLE "source_products" ADD COLUMN "first_seen_import_run_id" integer;--> statement-breakpoint
+ALTER TABLE "source_products" ADD CONSTRAINT "source_products_first_seen_import_run_id_import_runs_id_fk" FOREIGN KEY ("first_seen_import_run_id") REFERENCES "public"."import_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "first_seen_import_run_idx" ON "source_products" USING btree ("first_seen_import_run_id");

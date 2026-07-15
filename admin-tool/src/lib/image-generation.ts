@@ -22,7 +22,14 @@ const SYSTEM_INSTRUCTIONS =
   "sichtbar. Verändere das Schmuckstück selbst NICHT - Form, Fassung, Steinanzahl und Material " +
   "müssen exakt wie im Referenzbild bleiben. Spiegle oder drehe das Schmuckstück NICHT - " +
   "Vorderseite, Rückseite sowie Innen- und Außenseite müssen exakt wie im Referenzbild ausgerichtet " +
-  "bleiben. Generiere nur die Körperpartie und die Umgebung drumherum.";
+  "bleiben. Generiere nur die Körperpartie und die Umgebung drumherum. " +
+  "KRITISCH bei Händen: Die Hand muss anatomisch absolut korrekt sein - genau fünf Finger inklusive " +
+  "sichtbarem Daumen, jeder Finger einzeln und klar voneinander getrennt, natürliche Proportionen " +
+  "und Gelenke. Vermeide stark gekrümmte, verschränkte oder zur Faust geballte Fingerhaltungen, bei " +
+  "denen Finger übereinander- oder ineinanderliegen - das führt zu Fehlern wie verschmolzenen " +
+  "Fingern oder einem fehlenden Daumen. Bei Ringen: Der Ring sitzt vollständig auf GENAU EINEM " +
+  "Finger und umschließt nur diesen einen Finger - er darf niemals zwei Finger überbrücken, " +
+  "verbinden oder wie ein Steg zwischen zwei Fingern wirken.";
 
 function referenceImageUrl(product: SourceProductRow): string | null {
   if (product.freistellerUrl) return product.freistellerUrl;

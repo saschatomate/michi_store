@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { desc, sql } from "drizzle-orm";
+import { desc, sql, ne } from "drizzle-orm";
 import { db } from "@/db/client";
-import { sourceProducts } from "@/db/schema";
+import { sourceProducts, importRuns } from "@/db/schema";
 import { FilterBar } from "@/components/FilterBar";
 import { ProductTable, type ProductListItem } from "@/components/ProductTable";
 import { parseFilters, buildWhere, PAGE_SIZE } from "@/lib/product-query";
@@ -18,7 +18,7 @@ export default async function ProductListPage({
   const filters = parseFilters(rawParams);
   const where = buildWhere(filters);
 
-  const [rows, [{ count }]] = await Promise.all([
+  const [rows, [{ count }], [latestRun]] = await Promise.all([
     db
       .select({
         id: sourceProducts.id,
@@ -33,6 +33,7 @@ export default async function ProductListPage({
         status: sourceProducts.status,
         freistellerUrl: sourceProducts.freistellerUrl,
         bildUrls: sourceProducts.bildUrls,
+        firstSeenImportRunId: sourceProducts.firstSeenImportRunId,
       })
       .from(sourceProducts)
       .where(where)
@@ -43,7 +44,15 @@ export default async function ProductListPage({
       .select({ count: sql<number>`count(*)` })
       .from(sourceProducts)
       .where(where),
+    db
+      .select({ id: importRuns.id })
+      .from(importRuns)
+      .where(ne(importRuns.status, "running"))
+      .orderBy(desc(importRuns.startedAt))
+      .limit(1),
   ]);
+
+  const latestImportRunId = latestRun?.id ?? null;
 
   const products: ProductListItem[] = rows.map((r) => ({
     id: r.id,
@@ -57,6 +66,7 @@ export default async function ProductListPage({
     bestand: r.bestand,
     status: r.status,
     thumbnailUrl: r.freistellerUrl ?? r.bildUrls?.[0] ?? null,
+    isNew: r.firstSeenImportRunId !== null && r.firstSeenImportRunId === latestImportRunId,
   }));
 
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));

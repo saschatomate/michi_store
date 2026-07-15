@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { isNotNull } from "drizzle-orm";
+import { isNotNull, desc, ne } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { db } from "@/db/client";
-import { sourceProducts, STATUS_VALUES } from "@/db/schema";
+import { sourceProducts, importRuns, STATUS_VALUES } from "@/db/schema";
 import { STATUS_LABELS } from "@/components/StatusBadge";
+import { formatDateTime } from "@/lib/format";
 import type { ProductFilters } from "@/lib/product-query";
 import { inputClass, selectClass, buttonPrimary, buttonGhost } from "@/lib/ui";
 
@@ -19,6 +20,17 @@ async function distinctValues(column: PgColumn) {
     .sort((a, b) => a.localeCompare(b, "de"));
 }
 
+const BESTAND_THRESHOLDS = [1, 2, 5];
+
+async function recentImportRuns() {
+  return db
+    .select({ id: importRuns.id, filename: importRuns.filename, startedAt: importRuns.startedAt })
+    .from(importRuns)
+    .where(ne(importRuns.status, "running"))
+    .orderBy(desc(importRuns.startedAt))
+    .limit(15);
+}
+
 type Overrides = Partial<{
   q: string | undefined;
   kategorie1: string | undefined;
@@ -26,11 +38,13 @@ type Overrides = Partial<{
   kategorie3: string | undefined;
   status: string | undefined;
   material: string[] | undefined;
+  legierung: string[] | undefined;
   priceMin: number | undefined;
   priceMax: number | undefined;
   caratMin: number | undefined;
   caratMax: number | undefined;
-  bestand: "instock" | "all" | undefined;
+  bestandMin: number | undefined;
+  importRunId: number | undefined;
 }>;
 
 function filterHref(filters: ProductFilters, overrides: Overrides) {
@@ -42,16 +56,18 @@ function filterHref(filters: ProductFilters, overrides: Overrides) {
   if (merged.kategorie3) params.set("kategorie3", merged.kategorie3);
   if (merged.status) params.set("status", merged.status);
   merged.material?.forEach((m) => params.append("material", m));
+  merged.legierung?.forEach((l) => params.append("legierung", l));
   if (merged.priceMin !== undefined) params.set("priceMin", String(merged.priceMin));
   if (merged.priceMax !== undefined) params.set("priceMax", String(merged.priceMax));
   if (merged.caratMin !== undefined) params.set("caratMin", String(merged.caratMin));
   if (merged.caratMax !== undefined) params.set("caratMax", String(merged.caratMax));
-  if (merged.bestand === "instock") params.set("bestand", "instock");
+  if (merged.bestandMin !== undefined) params.set("bestandMin", String(merged.bestandMin));
+  if (merged.importRunId !== undefined) params.set("importRunId", String(merged.importRunId));
   const qs = params.toString();
   return qs ? `/?${qs}` : "/";
 }
 
-function buildChips(filters: ProductFilters) {
+function buildChips(filters: ProductFilters, importRunLabel: string | null) {
   const chips: { key: string; label: string; href: string }[] = [];
 
   if (filters.q) {
@@ -92,6 +108,13 @@ function buildChips(filters: ProductFilters) {
       href: filterHref(filters, { material: filters.material!.filter((x) => x !== m) }),
     });
   });
+  filters.legierung?.forEach((l) => {
+    chips.push({
+      key: `legierung-${l}`,
+      label: `Legierung: ${l}`,
+      href: filterHref(filters, { legierung: filters.legierung!.filter((x) => x !== l) }),
+    });
+  });
   if (filters.priceMin !== undefined || filters.priceMax !== undefined) {
     chips.push({
       key: "price",
@@ -106,11 +129,18 @@ function buildChips(filters: ProductFilters) {
       href: filterHref(filters, { caratMin: undefined, caratMax: undefined }),
     });
   }
-  if (filters.bestand === "instock") {
+  if (filters.bestandMin !== undefined) {
     chips.push({
       key: "bestand",
-      label: "Nur Bestand ≥ 1",
-      href: filterHref(filters, { bestand: "all" }),
+      label: `Bestand ≥ ${filters.bestandMin}`,
+      href: filterHref(filters, { bestandMin: undefined }),
+    });
+  }
+  if (filters.importRunId !== undefined) {
+    chips.push({
+      key: "importRun",
+      label: `Import: ${importRunLabel ?? `Lauf #${filters.importRunId}`}`,
+      href: filterHref(filters, { importRunId: undefined }),
     });
   }
 
@@ -118,24 +148,32 @@ function buildChips(filters: ProductFilters) {
 }
 
 export async function FilterBar({ filters }: { filters: ProductFilters }) {
-  const [kategorien1, kategorien2, kategorien3, materialien] = await Promise.all([
+  const [kategorien1, kategorien2, kategorien3, materialien, legierungen, runs] = await Promise.all([
     distinctValues(sourceProducts.kategorieEbene1),
     distinctValues(sourceProducts.kategorieEbene2),
     distinctValues(sourceProducts.kategorieEbene3),
     distinctValues(sourceProducts.hauptmaterial),
+    distinctValues(sourceProducts.legierung),
+    recentImportRuns(),
   ]);
 
-  const chips = buildChips(filters);
+  const runLabels = Object.fromEntries(
+    runs.map((r) => [String(r.id), `${r.filename} — ${formatDateTime(r.startedAt)}`]),
+  );
+  const importRunLabel =
+    filters.importRunId !== undefined ? (runLabels[String(filters.importRunId)] ?? null) : null;
+
+  const chips = buildChips(filters, importRunLabel);
   const isActive = chips.length > 0;
 
   return (
     <form
       method="get"
-      className={`rounded-xl border bg-white p-4 shadow-sm transition-colors ${
+      className={`rounded-xl border bg-white p-5 shadow-sm transition-colors ${
         isActive ? "border-indigo-200 ring-1 ring-indigo-100" : "border-zinc-200/80"
       }`}
     >
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <div className={`flex items-center gap-1.5 ${isActive ? "text-indigo-600" : "text-zinc-500"}`}>
           <SlidersHorizontal size={14} />
           <span className="text-xs font-medium uppercase tracking-wide">Filter</span>
@@ -153,7 +191,7 @@ export async function FilterBar({ filters }: { filters: ProductFilters }) {
       </div>
 
       {isActive && (
-        <div className="mb-4 flex flex-wrap gap-1.5">
+        <div className="mb-5 flex flex-wrap gap-1.5">
           {chips.map((chip) => (
             <Link
               key={chip.key}
@@ -167,87 +205,68 @@ export async function FilterBar({ filters }: { filters: ProductFilters }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
-        <div className="col-span-2 lg:col-span-2">
-          <label className="mb-1.5 block text-xs font-medium text-zinc-500">Suche</label>
-          <div className="relative">
-            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-            <input
-              type="text"
-              name="q"
-              defaultValue={filters.q}
-              placeholder="Bezeichnung, Modell_Erweitert, EAN…"
-              className={`${inputClass} pl-8`}
-            />
-          </div>
-        </div>
-
-        <Select label="Kategorie 1" name="kategorie1" options={kategorien1} value={filters.kategorie1} />
-        <Select label="Kategorie 2" name="kategorie2" options={kategorien2} value={filters.kategorie2} />
-        <Select label="Kategorie 3" name="kategorie3" options={kategorien3} value={filters.kategorie3} />
-        <Select label="Status" name="status" options={[...STATUS_VALUES]} labels={STATUS_LABELS} value={filters.status} />
-
-        <div className="col-span-2 md:col-span-2">
-          <label className="mb-1.5 block text-xs font-medium text-zinc-500">Material</label>
-          <div className="flex max-h-20 flex-wrap gap-x-3 gap-y-1.5 overflow-y-auto rounded-md border border-zinc-200 p-2 text-xs">
-            {materialien.map((m) => (
-              <label key={m} className="flex items-center gap-1.5 text-zinc-600">
-                <input
-                  type="checkbox"
-                  name="material"
-                  value={m}
-                  defaultChecked={filters.material?.includes(m)}
-                  className="h-3.5 w-3.5 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                {m}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-zinc-500">UVP von / bis (€)</label>
-          <div className="flex gap-1.5">
-            <input type="number" name="priceMin" defaultValue={filters.priceMin} className={inputClass} />
-            <input type="number" name="priceMax" defaultValue={filters.priceMax} className={inputClass} />
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-zinc-500">Karat von / bis</label>
-          <div className="flex gap-1.5">
-            <input
-              type="number"
-              step="0.01"
-              name="caratMin"
-              defaultValue={filters.caratMin}
-              className={inputClass}
-            />
-            <input
-              type="number"
-              step="0.01"
-              name="caratMax"
-              defaultValue={filters.caratMax}
-              className={inputClass}
-            />
-          </div>
-        </div>
-
-        <div className="flex items-end">
-          <label className="flex items-center gap-1.5 text-sm text-zinc-600">
-            <input
-              type="checkbox"
-              name="bestand"
-              value="instock"
-              defaultChecked={filters.bestand === "instock"}
-              className="h-3.5 w-3.5 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            Nur Bestand ≥ 1
-          </label>
+      {/* Suche steht bewusst prominent und für sich - der schnellste Weg, ein Produkt zu finden */}
+      <div className="mb-5">
+        <label className="mb-1.5 block text-xs font-medium text-zinc-500">Suche</label>
+        <div className="relative max-w-md">
+          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+          <input
+            type="text"
+            name="q"
+            defaultValue={filters.q}
+            placeholder="Bezeichnung, Modell_Erweitert, EAN…"
+            className={`${inputClass} pl-9`}
+          />
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-2 border-t border-zinc-100 pt-4">
+      <div className="space-y-5">
+        <FilterGroup title="Kategorisierung">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Select label="Kategorie 1" name="kategorie1" options={kategorien1} value={filters.kategorie1} />
+            <Select label="Kategorie 2" name="kategorie2" options={kategorien2} value={filters.kategorie2} />
+            <Select label="Kategorie 3" name="kategorie3" options={kategorien3} value={filters.kategorie3} />
+            <Select label="Status" name="status" options={[...STATUS_VALUES]} labels={STATUS_LABELS} value={filters.status} />
+          </div>
+        </FilterGroup>
+
+        <FilterGroup title="Material">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <CheckboxGroup label="Material" name="material" options={materialien} selected={filters.material} />
+            <CheckboxGroup label="Legierung" name="legierung" options={legierungen} selected={filters.legierung} />
+          </div>
+        </FilterGroup>
+
+        <FilterGroup title="Preis, Karat & Verfügbarkeit">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <RangeInputs label="UVP von / bis (€)" nameMin="priceMin" nameMax="priceMax" valueMin={filters.priceMin} valueMax={filters.priceMax} />
+            <RangeInputs
+              label="Karat von / bis"
+              nameMin="caratMin"
+              nameMax="caratMax"
+              valueMin={filters.caratMin}
+              valueMax={filters.caratMax}
+              step="0.01"
+            />
+            <Select
+              label="Bestand"
+              name="bestandMin"
+              options={BESTAND_THRESHOLDS.map(String)}
+              labels={Object.fromEntries(BESTAND_THRESHOLDS.map((n) => [String(n), `≥ ${n}`]))}
+              value={filters.bestandMin?.toString()}
+            />
+            <Select
+              label="Neu aus Import"
+              name="importRunId"
+              options={runs.map((r) => String(r.id))}
+              labels={runLabels}
+              value={filters.importRunId?.toString()}
+            />
+          </div>
+        </FilterGroup>
+      </div>
+
+      <div className="mt-5 flex items-center gap-2 border-t border-zinc-100 pt-5">
         <button type="submit" className={buttonPrimary}>
           Filtern
         </button>
@@ -256,6 +275,73 @@ export async function FilterBar({ filters }: { filters: ProductFilters }) {
         </Link>
       </div>
     </form>
+  );
+}
+
+function FilterGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="border-t border-zinc-100 pt-5 first:border-t-0 first:pt-0">
+      <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function CheckboxGroup({
+  label,
+  name,
+  options,
+  selected,
+}: {
+  label: string;
+  name: string;
+  options: string[];
+  selected?: string[];
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-medium text-zinc-500">{label}</label>
+      <div className="flex max-h-24 flex-wrap gap-x-3 gap-y-1.5 overflow-y-auto rounded-md border border-zinc-200 p-2.5 text-xs">
+        {options.map((o) => (
+          <label key={o} className="flex items-center gap-1.5 text-zinc-600">
+            <input
+              type="checkbox"
+              name={name}
+              value={o}
+              defaultChecked={selected?.includes(o)}
+              className="h-3.5 w-3.5 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            {o}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RangeInputs({
+  label,
+  nameMin,
+  nameMax,
+  valueMin,
+  valueMax,
+  step,
+}: {
+  label: string;
+  nameMin: string;
+  nameMax: string;
+  valueMin?: number;
+  valueMax?: number;
+  step?: string;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-medium text-zinc-500">{label}</label>
+      <div className="flex gap-1.5">
+        <input type="number" step={step} name={nameMin} defaultValue={valueMin} placeholder="von" className={inputClass} />
+        <input type="number" step={step} name={nameMax} defaultValue={valueMax} placeholder="bis" className={inputClass} />
+      </div>
+    </div>
   );
 }
 

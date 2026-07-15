@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -o /tmp/ring-check/r11-0.png \"https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/11/0-1784156334475.png\")",
+      "Bash(curl -s -o /tmp/ring-check/r11-1.png \"https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/11/1-1784156336248.png\")",
+      "Bash(curl -s -o /tmp/ring-check/r11-2.png \"https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/11/2-1784156320649.png\")",
+      "Bash(curl -s -o /tmp/ring-check/r1398-0.png \"https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/1398/0-1784156810390.png\")",
+      "Bash(curl -s -o /tmp/ring-check/r1398-1.png \"https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/1398/1-1784156808632.png\")",
+      "Bash(node /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/check-filterbar.mjs)",
+      "Bash(node /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/check-login.mjs)",
+      "Bash(node /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/check-detail-sections.mjs)"
+    ]
+  }
+}

@@ -89,6 +89,11 @@ export const sourceProducts = pgTable(
     shopifyProductId: text("shopify_product_id"),
     sentToPipelineAt: timestamp("sent_to_pipeline_at", { withTimezone: true }),
 
+    // Welcher Import-Lauf diesen Artikel zuerst angelegt hat (nur bei INSERT gesetzt, bleibt bei
+    // Re-Import/Update unangetastet - siehe PRESERVE_ON_CONFLICT in csv-import.ts). NULL bei
+    // Artikeln, die vor Einführung dieses Felds importiert/eingespielt wurden.
+    firstSeenImportRunId: integer("first_seen_import_run_id").references(() => importRuns.id),
+
     // KI-generierte Texte (Komponente B, Teil 1) - nur aus strukturierten Feldern generiert,
     // nie aus langBezeichnungDe, um Faktenfehler bei Diamant-/Farbstein-Details zu vermeiden
     genProductNameDe: text("gen_product_name_de"),
@@ -114,6 +119,7 @@ export const sourceProducts = pgTable(
     index("kategorie_ebene1_idx").on(table.kategorieEbene1),
     index("hauptmaterial_idx").on(table.hauptmaterial),
     index("bestand_idx").on(table.bestand),
+    index("first_seen_import_run_idx").on(table.firstSeenImportRunId),
   ],
 );
 

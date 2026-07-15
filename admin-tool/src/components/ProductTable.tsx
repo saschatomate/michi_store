@@ -21,6 +21,7 @@ export type ProductListItem = {
   bestand: number | null;
   status: ProductStatus;
   thumbnailUrl: string | null;
+  isNew: boolean;
 };
 
 const currencyFormatter = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
@@ -171,12 +172,19 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
                   )}
                 </td>
                 <td className="px-3 py-2">
-                  <Link
-                    href={`/products/${p.id}`}
-                    className="font-medium text-zinc-900 hover:text-indigo-600"
-                  >
-                    {p.kurzBezeichnungDe ?? p.modellErweitert}
-                  </Link>
+                  <div className="flex items-center gap-1.5">
+                    <Link
+                      href={`/products/${p.id}`}
+                      className="font-medium text-zinc-900 hover:text-indigo-600"
+                    >
+                      {p.kurzBezeichnungDe ?? p.modellErweitert}
+                    </Link>
+                    {p.isNew && (
+                      <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        NEU
+                      </span>
+                    )}
+                  </div>
                   <div className="font-mono text-xs text-zinc-400">{p.modellErweitert}</div>
                 </td>
                 <td className="px-3 py-2 text-zinc-600">{p.kategorieEbene1 ?? "–"}</td>

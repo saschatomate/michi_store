@@ -9,11 +9,13 @@ export type ProductFilters = {
   kategorie2?: string;
   kategorie3?: string;
   material?: string[];
+  legierung?: string[];
   priceMin?: number;
   priceMax?: number;
   caratMin?: number;
   caratMax?: number;
-  bestand?: "instock" | "all";
+  bestandMin?: number;
+  importRunId?: number;
   status?: ProductStatus;
   page: number;
 };
@@ -30,13 +32,14 @@ function toNumberParam(value: string | undefined): number | undefined {
   return Number.isFinite(num) ? num : undefined;
 }
 
+function toStringArray(value: string | string[] | undefined): string[] | undefined {
+  const arr = Array.isArray(value) ? value : value ? [value] : undefined;
+  return arr && arr.length > 0 ? arr : undefined;
+}
+
 export function parseFilters(searchParams: RawSearchParams): ProductFilters {
-  const materialRaw = searchParams.material;
-  const material = Array.isArray(materialRaw)
-    ? materialRaw
-    : materialRaw
-      ? [materialRaw]
-      : undefined;
+  const material = toStringArray(searchParams.material);
+  const legierung = toStringArray(searchParams.legierung);
 
   const statusRaw = first(searchParams.status);
   const status =
@@ -49,12 +52,14 @@ export function parseFilters(searchParams: RawSearchParams): ProductFilters {
     kategorie1: first(searchParams.kategorie1) || undefined,
     kategorie2: first(searchParams.kategorie2) || undefined,
     kategorie3: first(searchParams.kategorie3) || undefined,
-    material: material && material.length > 0 ? material : undefined,
+    material,
+    legierung,
     priceMin: toNumberParam(first(searchParams.priceMin)),
     priceMax: toNumberParam(first(searchParams.priceMax)),
     caratMin: toNumberParam(first(searchParams.caratMin)),
     caratMax: toNumberParam(first(searchParams.caratMax)),
-    bestand: first(searchParams.bestand) === "instock" ? "instock" : "all",
+    bestandMin: toNumberParam(first(searchParams.bestandMin)),
+    importRunId: toNumberParam(first(searchParams.importRunId)),
     status,
     page: Math.max(1, toNumberParam(first(searchParams.page)) ?? 1),
   };
@@ -82,13 +87,20 @@ export function buildWhere(filters: ProductFilters): SQL | undefined {
   if (filters.material && filters.material.length > 0) {
     conditions.push(inArray(sourceProducts.hauptmaterial, filters.material));
   }
+  if (filters.legierung && filters.legierung.length > 0) {
+    conditions.push(inArray(sourceProducts.legierung, filters.legierung));
+  }
 
   if (filters.priceMin !== undefined) conditions.push(gte(sourceProducts.uvp, filters.priceMin));
   if (filters.priceMax !== undefined) conditions.push(lte(sourceProducts.uvp, filters.priceMax));
   if (filters.caratMin !== undefined) conditions.push(gte(sourceProducts.caratur, filters.caratMin));
   if (filters.caratMax !== undefined) conditions.push(lte(sourceProducts.caratur, filters.caratMax));
 
-  if (filters.bestand === "instock") conditions.push(gte(sourceProducts.bestand, 1));
+  if (filters.bestandMin !== undefined) conditions.push(gte(sourceProducts.bestand, filters.bestandMin));
+
+  if (filters.importRunId !== undefined) {
+    conditions.push(eq(sourceProducts.firstSeenImportRunId, filters.importRunId));
+  }
 
   if (filters.status) conditions.push(eq(sourceProducts.status, filters.status));
 
