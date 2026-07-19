@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { PackageSearch, Send, X, CheckCircle2 } from "lucide-react";
+import { PackageSearch, Send, X, CheckCircle2, ImageOff } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Lightbox } from "@/components/Lightbox";
 import { sendSelectedToPipeline } from "@/lib/product-actions";
@@ -168,7 +168,13 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
                       />
                     </button>
                   ) : (
-                    <div className="h-14 w-14 rounded-lg border border-zinc-200 bg-zinc-50" />
+                    <div
+                      title="Kein Bild von Diamond Group verfügbar"
+                      className="flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 text-zinc-400"
+                    >
+                      <ImageOff size={16} strokeWidth={1.5} />
+                      <span className="text-[8px] font-medium uppercase tracking-wide">Kein Bild</span>
+                    </div>
                   )}
                 </td>
                 <td className="px-3 py-2">

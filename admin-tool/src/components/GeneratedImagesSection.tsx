@@ -2,11 +2,13 @@
 
 import { useState, useTransition } from "react";
 import Image from "next/image";
-import { AlertCircle, CheckCircle2, ImageIcon, Pencil, RefreshCw, RotateCcw, X, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2, ImageIcon, Pencil, RefreshCw, RotateCcw, Trash2, X, XCircle } from "lucide-react";
 import {
   generateProductImages,
   approveProductImage,
   rejectProductImage,
+  deleteProductImageVariant,
+  regenerateProductImageVariant,
   updateImagePromptOverride,
 } from "@/lib/image-actions";
 import { buttonPrimary, buttonSecondary, buttonGhost, cardClass, inputClass } from "@/lib/ui";
@@ -48,7 +50,7 @@ function ImageCard({ item }: { item: GeneratedImageItem }) {
           </div>
         )}
       </div>
-      <div className="space-y-2 p-3">
+      <div className="space-y-1.5 p-3">
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-medium text-zinc-700">{item.handPreset}</span>
           <span
@@ -87,6 +89,28 @@ function ImageCard({ item }: { item: GeneratedImageItem }) {
             )}
           </div>
         )}
+        <div className="flex gap-1.5">
+          <button
+            onClick={() => startTransition(() => regenerateProductImageVariant(item.id))}
+            disabled={isPending}
+            className={`${buttonGhost} flex-1 px-2 py-1 text-xs`}
+          >
+            <RefreshCw size={12} className={isPending ? "animate-spin" : ""} />
+            Neu
+          </button>
+          <button
+            onClick={() => {
+              if (confirm("Dieses Bild wirklich löschen?")) {
+                startTransition(() => deleteProductImageVariant(item.id));
+              }
+            }}
+            disabled={isPending}
+            className={`${buttonGhost} flex-1 px-2 py-1 text-xs text-red-600 hover:bg-red-50`}
+          >
+            <Trash2 size={12} />
+            Löschen
+          </button>
+        </div>
       </div>
     </div>
   );

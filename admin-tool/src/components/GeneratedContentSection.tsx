@@ -128,7 +128,7 @@ export function GeneratedContentSection({
                   Freigeben
                 </button>
               )}
-              {status !== "abgelehnt" && (
+              {generatedAt && status !== "abgelehnt" && (
                 <button
                   onClick={() => startTransition(() => rejectProductContent(id))}
                   disabled={isPending}
@@ -147,10 +147,10 @@ export function GeneratedContentSection({
               <button
                 onClick={() => startTransition(() => regenerateProductContent(id))}
                 disabled={isPending}
-                className={buttonGhost}
+                className={generatedAt ? buttonGhost : buttonPrimary}
               >
                 <RefreshCw size={14} className={isPending ? "animate-spin" : ""} />
-                {isPending ? "Generiere…" : "Neu generieren"}
+                {isPending ? "Generiere…" : generatedAt ? "Neu generieren" : "Text für Shopify generieren"}
               </button>
             </>
           )}

@@ -8,7 +8,22 @@
       "Bash(curl -s -o /tmp/ring-check/r1398-1.png \"https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/1398/1-1784156808632.png\")",
       "Bash(node /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/check-filterbar.mjs)",
       "Bash(node /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/check-login.mjs)",
-      "Bash(node /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/check-detail-sections.mjs)"
+      "Bash(node /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/check-detail-sections.mjs)",
+      "Bash(node /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/test-manual-triggers.mjs)",
+      "Bash(find /Users/saschas/Documents/repos/Michi -iname \"*.csv\" 2>/dev/null | grep -v node_modules *)",
+      "Read(//Users/saschas/Downloads/**)",
+      "Read(//Users/saschas/**)",
+      "Bash(node /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/check-noimage.mjs)",
+      "Bash(find /Users/saschas/Documents/repos/Michi -iname \"*tiffany*\" 2>/dev/null | grep -v node_modules *)",
+      "Bash(node /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/test-style-refs.mjs)",
+      "Bash(curl -s -o /tmp/style-ref-check/ring.png \"https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/1762/0-1784468373131.png\")",
+      "Bash(curl -s -o /tmp/style-ref-check/ohrschmuck.png \"https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/18320/0-1784468451945.png\")",
+      "Bash(curl -s -o /tmp/style-ref-check/colliers.png \"https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/21152/0-1784467572261.png\")",
+      "Bash(curl -s -o /tmp/style-ref-check/armreif.png \"https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/22132/0-1784468530168.png\")",
+      "Bash(curl -s -o /tmp/style-ref-check/ring-source.png \"http://195.4.159.226/freisteller/1id80w_02.png\")",
+      "Bash(curl -s -o /tmp/style-ref-check/ohrschmuck-source.png \"http://195.4.159.226/freisteller/2v596g_02.png\")",
+      "Bash(curl -s -o /tmp/style-ref-check/colliers-source.png \"http://195.4.159.226/freisteller/4q670w_02.png\")",
+      "Bash(curl -s -o /tmp/style-ref-check/armreif-source.png \"http://195.4.159.226/freisteller/6b546w_02.png\")"
     ]
   }
 }

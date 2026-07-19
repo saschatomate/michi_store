@@ -138,3 +138,43 @@ export async function rejectProductImage(imageId: number): Promise<void> {
 
   revalidatePath(`/products/${row.sourceProductId}`);
 }
+
+// Löscht genau diese eine Variante (Storage-Objekt + DB-Zeile). Der Slot (variantIndex) ist danach
+// frei und wird beim nächsten "Bilder generieren" für dieses Produkt neu befüllt. Bewusst ohne
+// Freigabe-Schutz - ein expliziter Löschvorgang auf ein einzelnes Bild ist immer erlaubt, anders als
+// die pauschale Neu-Generierung, die freigegebene Varianten automatisch überspringt.
+export async function deleteProductImageVariant(imageId: number): Promise<void> {
+  await requireAuth();
+  const row = await db.query.productGeneratedImages.findFirst({
+    where: eq(productGeneratedImages.id, imageId),
+  });
+  if (!row) throw new Error("Bild nicht gefunden.");
+
+  if (row.storagePath) {
+    await deleteGeneratedImage(row.storagePath).catch(() => {});
+  }
+  await db.delete(productGeneratedImages).where(eq(productGeneratedImages.id, imageId));
+
+  revalidatePath(`/products/${row.sourceProductId}`);
+}
+
+// Generiert nur diese eine Variante neu (frischer, zufälliger Hautton/Handform-Preset), lässt die
+// anderen 2 Varianten unangetastet - anders als die pauschale "Neu generieren"-Aktion im Header, die
+// alle nicht-freigegebenen Varianten gleichzeitig ersetzt.
+export async function regenerateProductImageVariant(imageId: number): Promise<void> {
+  await requireAuth();
+  const row = await db.query.productGeneratedImages.findFirst({
+    where: eq(productGeneratedImages.id, imageId),
+  });
+  if (!row) throw new Error("Bild nicht gefunden.");
+
+  const product = await db.query.sourceProducts.findFirst({
+    where: eq(sourceProducts.id, row.sourceProductId),
+  });
+  if (!product) throw new Error("Artikel nicht gefunden.");
+
+  const [preset] = randomHandPresets();
+  await generateAndSaveVariant(product, preset, row.variantIndex);
+
+  revalidatePath(`/products/${row.sourceProductId}`);
+}

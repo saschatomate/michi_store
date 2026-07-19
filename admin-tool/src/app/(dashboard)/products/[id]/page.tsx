@@ -205,34 +205,30 @@ export default async function ProductDetailPage({
         )}
       </div>
 
-      {product.sentToPipelineAt && (
-        <GeneratedContentSection
-          id={product.id}
-          status={product.status}
-          isApproved={Boolean(product.contentApprovedAt)}
-          approvedAt={product.contentApprovedAt}
-          generatedAt={product.contentGeneratedAt}
-          generationError={product.contentGenerationError}
-          content={{
-            productName: product.genProductNameDe ?? "",
-            shortDescDe: product.genShortDescDe ?? "",
-            longDescDe: product.genLongDescDe ?? "",
-            shortDescEn: product.genShortDescEn ?? "",
-            longDescEn: product.genLongDescEn ?? "",
-            seoTitle: product.genSeoTitle ?? "",
-            seoDescription: product.genSeoDescription ?? "",
-          }}
-        />
-      )}
+      <GeneratedContentSection
+        id={product.id}
+        status={product.status}
+        isApproved={Boolean(product.contentApprovedAt)}
+        approvedAt={product.contentApprovedAt}
+        generatedAt={product.contentGeneratedAt}
+        generationError={product.contentGenerationError}
+        content={{
+          productName: product.genProductNameDe ?? "",
+          shortDescDe: product.genShortDescDe ?? "",
+          longDescDe: product.genLongDescDe ?? "",
+          shortDescEn: product.genShortDescEn ?? "",
+          longDescEn: product.genLongDescEn ?? "",
+          seoTitle: product.genSeoTitle ?? "",
+          seoDescription: product.genSeoDescription ?? "",
+        }}
+      />
 
-      {product.sentToPipelineAt && (
-        <GeneratedImagesSection
-          id={product.id}
-          images={generatedImages}
-          defaultPrompt={defaultImageBasePrompt(product)}
-          promptOverride={product.imagePromptOverride}
-        />
-      )}
+      <GeneratedImagesSection
+        id={product.id}
+        images={generatedImages}
+        defaultPrompt={defaultImageBasePrompt(product)}
+        promptOverride={product.imagePromptOverride}
+      />
     </div>
   );
 }

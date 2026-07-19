@@ -87,18 +87,43 @@ export async function generateProductImageVariant(
   }
 
   const referenceBuffer = await fetchImageBuffer(refUrl);
-  const referenceFile = await toFile(referenceBuffer, "reference", { type: guessMimeType(refUrl) });
+  const referenceFile = await toFile(referenceBuffer, "product-reference", { type: guessMimeType(refUrl) });
 
   const basePrompt = product.imagePromptOverride?.trim() || defaultImageBasePrompt(product);
+
+  // Optionale zweite Referenz (nur Foto-Stil: Pose, Licht, Bildausschnitt, Model-Qualität) - das
+  // dort abgebildete Schmuckstück gehört einer anderen Marke und darf in keiner Form übernommen
+  // werden. Nur unbrandete, generische Auswahl verwendet (siehe styleReferenceUrl-Kommentar in
+  // image-facts.ts). Ohne Override, da eine individuelle Prompt-Anpassung diese Anweisung nicht
+  // versehentlich verlieren darf.
+  const images = [referenceFile];
+  let stylePromptAddition = "";
+  if (mapping.styleReferenceUrl) {
+    const styleBuffer = await fetchImageBuffer(mapping.styleReferenceUrl);
+    const styleFile = await toFile(styleBuffer, "style-reference", {
+      type: guessMimeType(mapping.styleReferenceUrl),
+    });
+    images.push(styleFile);
+    stylePromptAddition =
+      " Dir werden ZWEI Bilder gegeben. Das ERSTE Bild zeigt das tatsächliche Schmuckstück, das " +
+      "unverändert dargestellt werden muss. Das ZWEITE Bild zeigt eine andere Schmuckmarke auf " +
+      "einem Model und dient AUSSCHLIESSLICH als fotografische Stilreferenz: Pose, Kamerawinkel, " +
+      "Bildausschnitt, Beleuchtung, Hautwiedergabe und allgemeine Bildqualität. Übernimm aus dem " +
+      "zweiten Bild NIEMALS das dort abgebildete Schmuckstück, dessen Design, Form, Logo, Gravur " +
+      "oder Markenzeichen - das im generierten Bild sichtbare Schmuckstück muss zu 100% aus dem " +
+      "ERSTEN Bild stammen.";
+  }
+
   const prompt =
-    `${basePrompt} Zeige ${preset.promptDescriptor}. Hohe Auflösung, scharfer Fokus auf das Schmuckstück.`;
+    `${basePrompt}${stylePromptAddition} Zeige ${preset.promptDescriptor}. Hohe Auflösung, scharfer ` +
+    `Fokus auf das Schmuckstück.`;
 
   // gpt-image-Modelle haben ein niedriges Per-Minute-Rate-Limit für Edit-Aufrufe; bei 3 parallelen
   // Varianten pro Produkt reicht das SDK-Default (2 Retries) oft nicht aus, um einen 429 mit
   // "retry after Ns" abzufedern - höheres maxRetries lässt den eingebauten Backoff das übernehmen.
   const client = new OpenAI({ apiKey, maxRetries: 6 });
   const response = await client.images.edit({
-    image: referenceFile,
+    image: images,
     prompt,
     model: "gpt-image-1.5",
     size: mapping.size,
