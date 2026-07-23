@@ -21,7 +21,8 @@ export type ProductListItem = {
   bestand: number | null;
   status: ProductStatus;
   thumbnailUrl: string | null;
-  isNew: boolean;
+  isNewArrival: boolean;
+  isMissingFromStock: boolean;
 };
 
 const currencyFormatter = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
@@ -185,9 +186,17 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
                     >
                       {p.kurzBezeichnungDe ?? p.modellErweitert}
                     </Link>
-                    {p.isNew && (
+                    {p.isNewArrival && (
                       <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
                         NEU
+                      </span>
+                    )}
+                    {p.isMissingFromStock && (
+                      <span
+                        title="In der letzten Lieferanten-Datei nicht mehr enthalten"
+                        className="inline-flex items-center rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500"
+                      >
+                        NICHT MEHR IM BESTAND
                       </span>
                     )}
                   </div>

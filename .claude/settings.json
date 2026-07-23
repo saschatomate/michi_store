@@ -23,7 +23,26 @@
       "Bash(curl -s -o /tmp/style-ref-check/ring-source.png \"http://195.4.159.226/freisteller/1id80w_02.png\")",
       "Bash(curl -s -o /tmp/style-ref-check/ohrschmuck-source.png \"http://195.4.159.226/freisteller/2v596g_02.png\")",
       "Bash(curl -s -o /tmp/style-ref-check/colliers-source.png \"http://195.4.159.226/freisteller/4q670w_02.png\")",
-      "Bash(curl -s -o /tmp/style-ref-check/armreif-source.png \"http://195.4.159.226/freisteller/6b546w_02.png\")"
+      "Bash(curl -s -o /tmp/style-ref-check/armreif-source.png \"http://195.4.159.226/freisteller/6b546w_02.png\")",
+      "Bash(curl -s -v --max-time 15 -u 'inzingeradm:phH2JK8cUu4SAa5F' 'http://195.4.159.226/')",
+      "Bash(curl -s --max-time 15 -u 'inzingeradm:phH2JK8cUu4SAa5F' \"http://195.4.159.226/log.txt\")",
+      "Bash(curl -s --max-time 15 -u 'inzingeradm:phH2JK8cUu4SAa5F' \"http://195.4.159.226/\")",
+      "Bash(openssl rand *)",
+      "Bash(lsof -ti:3000)",
+      "Bash(xargs -r kill -9)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:3000/login)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:3000/api/cron/daily-sync)",
+      "Bash(curl -s http://localhost:3000/api/cron/daily-sync -H \"Authorization: Bearer 1oapS5QiUyCYxL8/sE2aYZdS2WTC6EeKEK7Mr9noiZM=\")",
+      "Bash(nohup node server.mjs)",
+      "Bash(curl -s http://127.0.0.1:8899/items_dg_stock.csv)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://127.0.0.1:8899/items_dg_40.csv)",
+      "Bash(cp .env.local /tmp/env.local.backup)",
+      "Bash(sed -i '' 's#^FTP_URL=.*#FTP_URL=http://127.0.0.1:8899/#' .env.local)",
+      "Bash(mkdir -p shots)",
+      "Bash(node test-ftp-sync.mjs)",
+      "Bash(node test-ftp-sync-round2.mjs)",
+      "Bash(kill %1)",
+      "Bash(pkill -f \"mockftp/server.mjs\")"
     ]
   }
 }

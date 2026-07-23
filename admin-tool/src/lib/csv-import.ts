@@ -1,6 +1,6 @@
 import iconv from "iconv-lite";
 import { parse } from "csv-parse/sync";
-import { eq, getTableColumns, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { sourceProducts, importRuns } from "@/db/schema";
 
@@ -174,11 +174,27 @@ export type ImportResult = {
   errors: string[];
 };
 
+export type ImportOptions = {
+  source?: "manual" | "ftp_auto";
+  // Nur bei einem vollständigen Katalog-Export sinnvoll (täglicher Stock-Sync) - markiert Artikel,
+  // die in dieser Datei fehlen, als "nicht mehr im Bestand". Bei manuellen Teil-Uploads NICHT setzen,
+  // sonst würde ein Upload mit nur wenigen Zeilen fälschlich fast den ganzen Katalog als fehlend
+  // markieren.
+  detectDeletions?: boolean;
+};
+
+// Sicherheitsschwelle für die Löschungs-Erkennung: fehlen mehr als 20% des bekannten Katalogs in der
+// Datei, wirkt das eher wie eine abgeschnittene/fehlerhafte Datei als ein echter Bestandsabbau -
+// dann lieber nichts markieren und stattdessen warnen (vgl. frühere versehentliche
+// Datenverlust-Lektion in diesem Projekt: nie blind auf Basis einer verdächtigen Datei überschreiben).
+const DELETION_SAFETY_THRESHOLD = 0.2;
+
 const BATCH_SIZE = 100;
 
 export async function importCsvBuffer(
   buffer: Buffer,
   filename: string,
+  options?: ImportOptions,
 ): Promise<ImportResult> {
   const utf8Content = iconv.decode(buffer, "ISO-8859-1");
 
@@ -192,7 +208,7 @@ export async function importCsvBuffer(
 
   const [run] = await db
     .insert(importRuns)
-    .values({ filename, rowsTotal: rows.length, status: "running" })
+    .values({ filename, source: options?.source ?? "manual", rowsTotal: rows.length, status: "running" })
     .returning({ id: importRuns.id });
 
   const errors: string[] = [];
@@ -250,6 +266,40 @@ export async function importCsvBuffer(
         `Zeilen ${batch[0].rowNumber}-${batch[batch.length - 1].rowNumber}: Batch fehlgeschlagen (${message}).`,
       );
     }
+  }
+
+  if (options?.detectDeletions && parsedRows.length > 0) {
+    const currentSkus = Array.from(parsedByModell.keys());
+
+    const [{ totalCount }] = await db.select({ totalCount: sql<number>`count(*)::int` }).from(sourceProducts);
+    const [{ missingCount }] = await db
+      .select({ missingCount: sql<number>`count(*)::int` })
+      .from(sourceProducts)
+      .where(and(isNull(sourceProducts.missingFromStockAt), notInArray(sourceProducts.modellErweitert, currentSkus)));
+
+    if (missingCount > 0) {
+      if (missingCount > totalCount * DELETION_SAFETY_THRESHOLD) {
+        errors.push(
+          `Löschungs-Erkennung übersprungen: ${missingCount} von ${totalCount} Artikeln fehlen in ` +
+            `"${filename}" (mehr als ${DELETION_SAFETY_THRESHOLD * 100}%). Wirkt wie eine ` +
+            `unvollständige Datei - sicherheitshalber wurde nichts als "nicht mehr im Bestand" markiert.`,
+        );
+      } else {
+        await db
+          .update(sourceProducts)
+          .set({ missingFromStockAt: new Date() })
+          .where(
+            and(isNull(sourceProducts.missingFromStockAt), notInArray(sourceProducts.modellErweitert, currentSkus)),
+          );
+      }
+    }
+
+    // Selbstheilung: Artikel, die zuvor als fehlend markiert waren, aber wieder in der Datei
+    // auftauchen, bekommen ihren Status zurück.
+    await db
+      .update(sourceProducts)
+      .set({ missingFromStockAt: null })
+      .where(and(isNotNull(sourceProducts.missingFromStockAt), inArray(sourceProducts.modellErweitert, currentSkus)));
   }
 
   await db

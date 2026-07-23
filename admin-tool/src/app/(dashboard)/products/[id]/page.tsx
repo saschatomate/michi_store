@@ -79,12 +79,27 @@ export default async function ProductDetailPage({
           <p className="mt-1 text-sm text-zinc-500">
             Modell_Erweitert: <span className="font-mono text-zinc-700">{product.modellErweitert}</span>
           </p>
-          {product.giaZertifikatNr && (
-            <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
-              <BadgeCheck size={13} />
-              GIA-Zertifikat: {product.giaZertifikatNr}
-            </span>
-          )}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {product.giaZertifikatNr && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
+                <BadgeCheck size={13} />
+                GIA-Zertifikat: {product.giaZertifikatNr}
+              </span>
+            )}
+            {product.newArrivalAt && (
+              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                NEU ERSCHIENEN
+              </span>
+            )}
+            {product.missingFromStockAt && (
+              <span
+                title="In der letzten Lieferanten-Datei nicht mehr enthalten"
+                className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-500"
+              >
+                NICHT MEHR IM BESTAND
+              </span>
+            )}
+          </div>
         </div>
         <StatusSelect id={product.id} status={product.status} />
       </div>
@@ -124,6 +139,8 @@ export default async function ProductDetailPage({
             <Field label="Shopify Product ID" value={product.shopifyProductId} />
             <Field label="An Pipeline gesendet" value={formatDateTime(product.sentToPipelineAt)} />
             <Field label="Zuletzt aktualisiert" value={formatDateTime(product.updatedAt)} />
+            <Field label="Neu seit" value={formatDateTime(product.newArrivalAt)} />
+            <Field label="Nicht mehr im Bestand seit" value={formatDateTime(product.missingFromStockAt)} />
           </dl>
         </section>
 

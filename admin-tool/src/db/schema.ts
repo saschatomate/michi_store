@@ -94,6 +94,14 @@ export const sourceProducts = pgTable(
     // Artikeln, die vor Einführung dieses Felds importiert/eingespielt wurden.
     firstSeenImportRunId: integer("first_seen_import_run_id").references(() => importRuns.id),
 
+    // Täglicher Diamond-Group-Sync (items_dg_stock.csv / items_dg_40.csv): newArrivalAt ist gesetzt,
+    // solange die SKU in der aktuellen 40er-Datei auftaucht (verschwindet automatisch, sobald sie dort
+    // nicht mehr vorkommt - siehe ftp-sync.ts). missingFromStockAt ist gesetzt, wenn die SKU im
+    // letzten vollständigen Stock-Import nicht mehr enthalten war (nicht-destruktiv, kein Löschen -
+    // heilt selbst, falls der Artikel wieder auftaucht).
+    newArrivalAt: timestamp("new_arrival_at", { withTimezone: true }),
+    missingFromStockAt: timestamp("missing_from_stock_at", { withTimezone: true }),
+
     // KI-generierte Texte (Komponente B, Teil 1) - nur aus strukturierten Feldern generiert,
     // nie aus langBezeichnungDe, um Faktenfehler bei Diamant-/Farbstein-Details zu vermeiden
     genProductNameDe: text("gen_product_name_de"),
@@ -120,6 +128,8 @@ export const sourceProducts = pgTable(
     index("hauptmaterial_idx").on(table.hauptmaterial),
     index("bestand_idx").on(table.bestand),
     index("first_seen_import_run_idx").on(table.firstSeenImportRunId),
+    index("new_arrival_at_idx").on(table.newArrivalAt),
+    index("missing_from_stock_at_idx").on(table.missingFromStockAt),
   ],
 );
 
@@ -152,6 +162,8 @@ export const productGeneratedImages = pgTable(
 export const importRuns = pgTable("import_runs", {
   id: serial("id").primaryKey(),
   filename: text("filename").notNull(),
+  // "manual" (Upload über /import) | "ftp_auto" (täglicher Diamond-Group-Sync, siehe ftp-sync.ts)
+  source: text("source").notNull().default("manual"),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
   rowsTotal: integer("rows_total").notNull().default(0),

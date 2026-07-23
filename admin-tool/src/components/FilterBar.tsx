@@ -45,6 +45,8 @@ type Overrides = Partial<{
   caratMax: number | undefined;
   bestandMin: number | undefined;
   importRunId: number | undefined;
+  newArrivalOnly: boolean | undefined;
+  missingOnly: boolean | undefined;
 }>;
 
 function filterHref(filters: ProductFilters, overrides: Overrides) {
@@ -63,6 +65,8 @@ function filterHref(filters: ProductFilters, overrides: Overrides) {
   if (merged.caratMax !== undefined) params.set("caratMax", String(merged.caratMax));
   if (merged.bestandMin !== undefined) params.set("bestandMin", String(merged.bestandMin));
   if (merged.importRunId !== undefined) params.set("importRunId", String(merged.importRunId));
+  if (merged.newArrivalOnly) params.set("newArrivalOnly", "1");
+  if (merged.missingOnly) params.set("missingOnly", "1");
   const qs = params.toString();
   return qs ? `/?${qs}` : "/";
 }
@@ -141,6 +145,20 @@ function buildChips(filters: ProductFilters, importRunLabel: string | null) {
       key: "importRun",
       label: `Import: ${importRunLabel ?? `Lauf #${filters.importRunId}`}`,
       href: filterHref(filters, { importRunId: undefined }),
+    });
+  }
+  if (filters.newArrivalOnly) {
+    chips.push({
+      key: "newArrivalOnly",
+      label: "Neu erschienen",
+      href: filterHref(filters, { newArrivalOnly: undefined }),
+    });
+  }
+  if (filters.missingOnly) {
+    chips.push({
+      key: "missingOnly",
+      label: "Nicht mehr im Bestand",
+      href: filterHref(filters, { missingOnly: undefined }),
     });
   }
 
@@ -264,6 +282,21 @@ export async function FilterBar({ filters }: { filters: ProductFilters }) {
             />
           </div>
         </FilterGroup>
+
+        <FilterGroup title="Neuheiten & Verfügbarkeit">
+          <div className="flex flex-wrap gap-4">
+            <BooleanFilter
+              label="Nur neu erschienene Produkte"
+              name="newArrivalOnly"
+              checked={filters.newArrivalOnly ?? false}
+            />
+            <BooleanFilter
+              label="Nur nicht mehr im Bestand"
+              name="missingOnly"
+              checked={filters.missingOnly ?? false}
+            />
+          </div>
+        </FilterGroup>
       </div>
 
       <div className="mt-5 flex items-center gap-2 border-t border-zinc-100 pt-5">
@@ -316,6 +349,21 @@ function CheckboxGroup({
         ))}
       </div>
     </div>
+  );
+}
+
+function BooleanFilter({ label, name, checked }: { label: string; name: string; checked: boolean }) {
+  return (
+    <label className="flex items-center gap-1.5 text-xs font-medium text-zinc-600">
+      <input
+        type="checkbox"
+        name={name}
+        value="1"
+        defaultChecked={checked}
+        className="h-3.5 w-3.5 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+      />
+      {label}
+    </label>
   );
 }
 

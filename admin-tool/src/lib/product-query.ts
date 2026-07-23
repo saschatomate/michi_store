@@ -1,4 +1,4 @@
-import { and, or, eq, inArray, gte, lte, like, sql, type SQL } from "drizzle-orm";
+import { and, or, eq, inArray, gte, lte, like, isNotNull, sql, type SQL } from "drizzle-orm";
 import { sourceProducts, STATUS_VALUES, type ProductStatus } from "@/db/schema";
 
 export const PAGE_SIZE = 30;
@@ -17,6 +17,8 @@ export type ProductFilters = {
   bestandMin?: number;
   importRunId?: number;
   status?: ProductStatus;
+  newArrivalOnly?: boolean;
+  missingOnly?: boolean;
   page: number;
 };
 
@@ -61,6 +63,8 @@ export function parseFilters(searchParams: RawSearchParams): ProductFilters {
     bestandMin: toNumberParam(first(searchParams.bestandMin)),
     importRunId: toNumberParam(first(searchParams.importRunId)),
     status,
+    newArrivalOnly: first(searchParams.newArrivalOnly) === "1" || undefined,
+    missingOnly: first(searchParams.missingOnly) === "1" || undefined,
     page: Math.max(1, toNumberParam(first(searchParams.page)) ?? 1),
   };
 }
@@ -103,6 +107,9 @@ export function buildWhere(filters: ProductFilters): SQL | undefined {
   }
 
   if (filters.status) conditions.push(eq(sourceProducts.status, filters.status));
+
+  if (filters.newArrivalOnly) conditions.push(isNotNull(sourceProducts.newArrivalAt));
+  if (filters.missingOnly) conditions.push(isNotNull(sourceProducts.missingFromStockAt));
 
   return conditions.length > 0 ? and(...conditions) : undefined;
 }

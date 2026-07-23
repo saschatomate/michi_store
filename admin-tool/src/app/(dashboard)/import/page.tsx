@@ -4,7 +4,13 @@ import { db } from "@/db/client";
 import { importRuns } from "@/db/schema";
 import { formatDateTime } from "@/lib/format";
 import { cardClass } from "@/lib/ui";
+import { SyncNowButton } from "@/components/SyncNowButton";
 import { UploadForm } from "./UploadForm";
+
+const sourceLabel: Record<string, string> = {
+  manual: "Manuell",
+  ftp_auto: "Automatisch (FTP)",
+};
 
 const statusDot: Record<string, string> = {
   success: "bg-emerald-500",
@@ -38,6 +44,8 @@ export default async function ImportPage() {
 
       <UploadForm />
 
+      <SyncNowButton />
+
       <div className={`overflow-hidden ${cardClass}`}>
         <div className="flex items-center gap-2 border-b border-zinc-200 px-4 py-3">
           <History size={15} className="text-zinc-500" />
@@ -48,6 +56,7 @@ export default async function ImportPage() {
             <thead>
               <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
                 <th className={thClass}>Datei</th>
+                <th className={thClass}>Quelle</th>
                 <th className={thClass}>Gestartet</th>
                 <th className={thClass}>Status</th>
                 <th className={`${thClass} text-right`}>Gesamt</th>
@@ -59,7 +68,7 @@ export default async function ImportPage() {
             <tbody>
               {history.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-zinc-400">
+                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-zinc-400">
                     Noch kein Import durchgeführt.
                   </td>
                 </tr>
@@ -67,9 +76,13 @@ export default async function ImportPage() {
               {history.map((run) => (
                 <tr key={run.id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50">
                   <td className="px-4 py-2.5 font-medium text-zinc-900">{run.filename}</td>
+                  <td className="px-4 py-2.5 text-zinc-500">{sourceLabel[run.source] ?? run.source}</td>
                   <td className="px-4 py-2.5 text-zinc-500">{formatDateTime(run.startedAt)}</td>
                   <td className="px-4 py-2.5">
-                    <span className={`inline-flex items-center gap-1.5 font-medium ${statusText[run.status] ?? "text-zinc-600"}`}>
+                    <span
+                      title={run.errorMessage ?? undefined}
+                      className={`inline-flex items-center gap-1.5 font-medium ${statusText[run.status] ?? "text-zinc-600"} ${run.errorMessage ? "cursor-help underline decoration-dotted underline-offset-2" : ""}`}
+                    >
                       <span className={`h-1.5 w-1.5 rounded-full ${statusDot[run.status] ?? "bg-zinc-400"}`} />
                       {run.status}
                     </span>
