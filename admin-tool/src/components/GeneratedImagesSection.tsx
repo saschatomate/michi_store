@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Image from "next/image";
-import { AlertCircle, CheckCircle2, ImageIcon, Pencil, RefreshCw, RotateCcw, Trash2, X, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2, ImageIcon, Pencil, RefreshCw, RotateCcw, Trash2, X, XCircle, ZoomIn } from "lucide-react";
 import {
   generateProductImages,
   approveProductImage,
@@ -12,6 +12,7 @@ import {
   updateImagePromptOverride,
 } from "@/lib/image-actions";
 import { buttonPrimary, buttonSecondary, buttonGhost, cardClass, inputClass } from "@/lib/ui";
+import { Lightbox } from "@/components/Lightbox";
 import type { GeneratedImageStatus } from "@/db/schema";
 
 export type GeneratedImageItem = {
@@ -31,18 +32,30 @@ const statusLabel: Record<GeneratedImageStatus, string> = {
 
 function ImageCard({ item }: { item: GeneratedImageItem }) {
   const [isPending, startTransition] = useTransition();
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   return (
     <div className="overflow-hidden rounded-lg border border-zinc-200">
       <div className="flex aspect-square items-center justify-center bg-zinc-50">
         {item.imageUrl ? (
-          <Image
-            src={item.imageUrl}
-            alt={item.handPreset}
-            width={512}
-            height={512}
-            className="h-full w-full object-cover"
-          />
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(true)}
+            className="group relative h-full w-full"
+            aria-label="Bild vergrößern"
+          >
+            <Image
+              src={item.imageUrl}
+              alt={item.handPreset}
+              width={512}
+              height={512}
+              className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.02]"
+            />
+            <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-zinc-900/70 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
+              <ZoomIn size={12} />
+              Vergrößern
+            </span>
+          </button>
         ) : (
           <div className="flex flex-col items-center gap-1.5 p-4 text-center text-red-600">
             <AlertCircle size={18} />
@@ -112,6 +125,10 @@ function ImageCard({ item }: { item: GeneratedImageItem }) {
           </button>
         </div>
       </div>
+
+      {lightboxOpen && item.imageUrl && (
+        <Lightbox src={item.imageUrl} onClose={() => setLightboxOpen(false)} />
+      )}
     </div>
   );
 }

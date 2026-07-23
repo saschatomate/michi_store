@@ -3,9 +3,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { desc, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { sourceProducts } from "@/db/schema";
-import { FilterBar } from "@/components/FilterBar";
 import { ProductTable, type ProductListItem } from "@/components/ProductTable";
-import { parseFilters, buildWhere, PAGE_SIZE } from "@/lib/product-query";
+import { parseFilters, buildWhere, isNewArrival, PAGE_SIZE } from "@/lib/product-query";
 
 type SearchParams = { [key: string]: string | string[] | undefined };
 
@@ -59,7 +58,7 @@ export default async function ProductListPage({
     bestand: r.bestand,
     status: r.status,
     thumbnailUrl: r.freistellerUrl ?? r.bildUrls?.[0] ?? null,
-    isNewArrival: r.newArrivalAt !== null,
+    isNewArrival: isNewArrival(r.newArrivalAt),
     isMissingFromStock: r.missingFromStockAt !== null,
   }));
 
@@ -84,8 +83,6 @@ export default async function ProductListPage({
         <h1 className="font-display text-3xl font-semibold text-zinc-900">Produkte</h1>
         <p className="mt-0.5 text-sm text-zinc-500">{count.toLocaleString("de-DE")} Artikel gefunden.</p>
       </div>
-
-      <FilterBar filters={filters} />
 
       <ProductTable products={products} />
 

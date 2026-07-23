@@ -1,34 +1,24 @@
+"use client";
+
 import Link from "next/link";
-import { isNotNull, desc, ne } from "drizzle-orm";
-import type { PgColumn } from "drizzle-orm/pg-core";
+import { useSearchParams } from "next/navigation";
 import { Search, SlidersHorizontal, X } from "lucide-react";
-import { db } from "@/db/client";
-import { sourceProducts, importRuns, STATUS_VALUES } from "@/db/schema";
+import { STATUS_VALUES } from "@/db/schema";
 import { STATUS_LABELS } from "@/components/StatusBadge";
 import { formatDateTime } from "@/lib/format";
-import type { ProductFilters } from "@/lib/product-query";
+import { parseFilters, type ProductFilters } from "@/lib/product-query";
+import type { FilterOptions } from "@/lib/filter-options";
 import { inputClass, selectClass, buttonPrimary, buttonGhost } from "@/lib/ui";
-
-async function distinctValues(column: PgColumn) {
-  const rows = await db
-    .selectDistinct({ value: column })
-    .from(sourceProducts)
-    .where(isNotNull(column));
-  return rows
-    .map((r) => r.value as string | null)
-    .filter((v): v is string => Boolean(v))
-    .sort((a, b) => a.localeCompare(b, "de"));
-}
 
 const BESTAND_THRESHOLDS = [1, 2, 5];
 
-async function recentImportRuns() {
-  return db
-    .select({ id: importRuns.id, filename: importRuns.filename, startedAt: importRuns.startedAt })
-    .from(importRuns)
-    .where(ne(importRuns.status, "running"))
-    .orderBy(desc(importRuns.startedAt))
-    .limit(15);
+function searchParamsToRaw(sp: URLSearchParams): Record<string, string | string[]> {
+  const raw: Record<string, string | string[]> = {};
+  for (const key of new Set(sp.keys())) {
+    const values = sp.getAll(key);
+    raw[key] = values.length > 1 ? values : values[0];
+  }
+  return raw;
 }
 
 type Overrides = Partial<{
@@ -165,15 +155,10 @@ function buildChips(filters: ProductFilters, importRunLabel: string | null) {
   return chips;
 }
 
-export async function FilterBar({ filters }: { filters: ProductFilters }) {
-  const [kategorien1, kategorien2, kategorien3, materialien, legierungen, runs] = await Promise.all([
-    distinctValues(sourceProducts.kategorieEbene1),
-    distinctValues(sourceProducts.kategorieEbene2),
-    distinctValues(sourceProducts.kategorieEbene3),
-    distinctValues(sourceProducts.hauptmaterial),
-    distinctValues(sourceProducts.legierung),
-    recentImportRuns(),
-  ]);
+export function FilterPanel({ options }: { options: FilterOptions }) {
+  const searchParams = useSearchParams();
+  const filters = parseFilters(searchParamsToRaw(searchParams));
+  const { kategorien1, kategorien2, kategorien3, materialien, legierungen, runs } = options;
 
   const runLabels = Object.fromEntries(
     runs.map((r) => [String(r.id), `${r.filename} — ${formatDateTime(r.startedAt)}`]),
@@ -185,12 +170,7 @@ export async function FilterBar({ filters }: { filters: ProductFilters }) {
   const isActive = chips.length > 0;
 
   return (
-    <form
-      method="get"
-      className={`rounded-xl border bg-white p-5 shadow-sm transition-colors ${
-        isActive ? "border-indigo-200 ring-1 ring-indigo-100" : "border-zinc-200/80"
-      }`}
-    >
+    <form method="get" action="/" className="p-5">
       <div className="mb-4 flex items-center justify-between">
         <div className={`flex items-center gap-1.5 ${isActive ? "text-indigo-600" : "text-zinc-500"}`}>
           <SlidersHorizontal size={14} />
@@ -226,7 +206,7 @@ export async function FilterBar({ filters }: { filters: ProductFilters }) {
       {/* Suche steht bewusst prominent und für sich - der schnellste Weg, ein Produkt zu finden */}
       <div className="mb-5">
         <label className="mb-1.5 block text-xs font-medium text-zinc-500">Suche</label>
-        <div className="relative max-w-md">
+        <div className="relative">
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
           <input
             type="text"
@@ -240,7 +220,7 @@ export async function FilterBar({ filters }: { filters: ProductFilters }) {
 
       <div className="space-y-5">
         <FilterGroup title="Kategorisierung">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="space-y-3">
             <Select label="Kategorie 1" name="kategorie1" options={kategorien1} value={filters.kategorie1} />
             <Select label="Kategorie 2" name="kategorie2" options={kategorien2} value={filters.kategorie2} />
             <Select label="Kategorie 3" name="kategorie3" options={kategorien3} value={filters.kategorie3} />
@@ -249,14 +229,14 @@ export async function FilterBar({ filters }: { filters: ProductFilters }) {
         </FilterGroup>
 
         <FilterGroup title="Material">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-4">
             <CheckboxGroup label="Material" name="material" options={materialien} selected={filters.material} />
             <CheckboxGroup label="Legierung" name="legierung" options={legierungen} selected={filters.legierung} />
           </div>
         </FilterGroup>
 
         <FilterGroup title="Preis, Karat & Verfügbarkeit">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="space-y-3">
             <RangeInputs label="UVP von / bis (€)" nameMin="priceMin" nameMax="priceMax" valueMin={filters.priceMin} valueMax={filters.priceMax} />
             <RangeInputs
               label="Karat von / bis"
@@ -284,7 +264,7 @@ export async function FilterBar({ filters }: { filters: ProductFilters }) {
         </FilterGroup>
 
         <FilterGroup title="Neuheiten & Verfügbarkeit">
-          <div className="flex flex-wrap gap-4">
+          <div className="flex flex-col gap-2">
             <BooleanFilter
               label="Nur neu erschienene Produkte"
               name="newArrivalOnly"
@@ -299,11 +279,11 @@ export async function FilterBar({ filters }: { filters: ProductFilters }) {
         </FilterGroup>
       </div>
 
-      <div className="mt-5 flex items-center gap-2 border-t border-zinc-100 pt-5">
-        <button type="submit" className={buttonPrimary}>
+      <div className="mt-5 flex flex-col gap-2 border-t border-zinc-100 pt-5">
+        <button type="submit" className={`${buttonPrimary} w-full`}>
           Filtern
         </button>
-        <Link href="/" className={buttonGhost}>
+        <Link href="/" className={`${buttonGhost} w-full`}>
           Zurücksetzen
         </Link>
       </div>

@@ -1,9 +1,12 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Gem, Upload, Link2, LogOut } from "lucide-react";
 import { logout } from "@/lib/auth-actions";
+import { FilterPanel } from "@/components/FilterPanel";
+import type { FilterOptions } from "@/lib/filter-options";
 
 const NAV_ITEMS = [
   { href: "/", label: "Produkte", icon: Gem },
@@ -11,12 +14,12 @@ const NAV_ITEMS = [
   { href: "/mapping", label: "Mapping", icon: Link2 },
 ];
 
-export function Sidebar() {
+export function Sidebar({ filterOptions }: { filterOptions: FilterOptions }) {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-zinc-200/80 bg-white">
-      <div className="flex h-16 items-center gap-2.5 border-b border-zinc-200/80 px-5">
+    <aside className="sticky top-0 flex h-screen w-72 shrink-0 flex-col overflow-y-auto border-r border-zinc-200/80 bg-white">
+      <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-zinc-200/80 px-5">
         <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 font-display text-sm font-semibold text-white shadow-sm shadow-indigo-600/30">
           M
         </div>
@@ -25,7 +28,7 @@ export function Sidebar() {
         </span>
       </div>
 
-      <nav className="flex-1 space-y-0.5 px-3 py-4">
+      <nav className="shrink-0 space-y-0.5 px-3 py-4">
         {NAV_ITEMS.map((item) => {
           const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const Icon = item.icon;
@@ -46,7 +49,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="border-t border-zinc-200/80 p-3">
+      <div className="shrink-0 border-t border-zinc-200/80 p-3">
         <form action={logout}>
           <button
             type="submit"
@@ -57,6 +60,14 @@ export function Sidebar() {
           </button>
         </form>
       </div>
+
+      {pathname === "/" && (
+        <div className="shrink-0 border-t border-zinc-200/80">
+          <Suspense fallback={null}>
+            <FilterPanel options={filterOptions} />
+          </Suspense>
+        </div>
+      )}
     </aside>
   );
 }

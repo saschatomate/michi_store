@@ -9,6 +9,7 @@ import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { GeneratedContentSection } from "@/components/GeneratedContentSection";
 import { GeneratedImagesSection } from "@/components/GeneratedImagesSection";
 import { formatDateTime } from "@/lib/format";
+import { isNewArrival } from "@/lib/product-query";
 import { cardClass } from "@/lib/ui";
 import { diamondSlots, coloredStoneSlots } from "@/lib/product-facts";
 import { defaultImageBasePrompt } from "@/lib/image-generation";
@@ -86,7 +87,7 @@ export default async function ProductDetailPage({
                 GIA-Zertifikat: {product.giaZertifikatNr}
               </span>
             )}
-            {product.newArrivalAt && (
+            {isNewArrival(product.newArrivalAt) && (
               <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                 NEU ERSCHIENEN
               </span>
@@ -103,8 +104,6 @@ export default async function ProductDetailPage({
         </div>
         <StatusSelect id={product.id} status={product.status} />
       </div>
-
-      <ProductImageGallery images={images} />
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <section className={`${cardClass} p-4`}>
@@ -125,6 +124,8 @@ export default async function ProductDetailPage({
             <Field label="Produkt-Länge (cm)" value={product.produktLaengeCm} />
           </dl>
         </section>
+
+        <ProductImageGallery images={images} />
 
         <section className={`${cardClass} p-4`}>
           <SectionHeader icon={Wallet} title="Preise, Bestand & Verlauf" />
@@ -185,7 +186,7 @@ export default async function ProductDetailPage({
         </section>
 
         {(coloredStones.length > 0 || product.caraturFarbstein) && (
-          <section className={`${cardClass} p-4`}>
+          <section className={`${cardClass} p-4 md:col-span-2`}>
             <SectionHeader icon={Sparkles} title="Farbstein (Übersicht)" />
             <dl className="grid grid-cols-2 gap-3">
               <Field label="Caratur" value={product.caraturFarbstein} />

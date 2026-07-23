@@ -6,7 +6,21 @@ import { sourceProducts, importRuns } from "@/db/schema";
 
 type CsvRow = Record<string, string>;
 
-function toNullableString(value: string | undefined): string | null {
+// Gemeinsames Diamond-Group-CSV-Format (Semikolon-getrennt, ISO-8859-1) - auch von ftp-sync.ts für
+// die items_dg_stock.csv-Bestandsdatei verwendet, die nicht über importCsvBuffer läuft (anderes
+// Schema/Schlüssel als der Produktkatalog).
+export function decodeAndParseCsv(buffer: Buffer): CsvRow[] {
+  const utf8Content = iconv.decode(buffer, "ISO-8859-1");
+  return parse(utf8Content, {
+    delimiter: ";",
+    columns: true,
+    skip_empty_lines: true,
+    relax_column_count: true,
+    trim: false,
+  });
+}
+
+export function toNullableString(value: string | undefined): string | null {
   if (value === undefined) return null;
   const trimmed = value.trim();
   return trimmed === "" ? null : trimmed;
@@ -24,7 +38,7 @@ function toNumber(value: string | undefined): number | null {
   return Number.isNaN(fallback) ? null : fallback;
 }
 
-function toInt(value: string | undefined): number | null {
+export function toInt(value: string | undefined): number | null {
   const num = toNumber(value);
   return num === null ? null : Math.round(num);
 }
@@ -71,6 +85,8 @@ const PRESERVE_ON_CONFLICT = new Set([
   "contentGenerationError",
   "imagePromptOverride",
   "firstSeenImportRunId",
+  "newArrivalAt",
+  "missingFromStockAt",
 ]);
 
 function conflictUpdateSet() {
@@ -157,9 +173,13 @@ function parseRow(
 
     rawJson: row,
     updatedAt: new Date(),
-    // Nur bei Erstanlage relevant (siehe PRESERVE_ON_CONFLICT) - bei einem bereits existierenden
-    // Artikel wird dieser Wert beim Re-Import ignoriert und der ursprüngliche Lauf bleibt erhalten.
+    // Beide nur bei Erstanlage relevant (siehe PRESERVE_ON_CONFLICT) - bei einem bereits
+    // existierenden Artikel werden diese Werte beim Re-Import ignoriert. newArrivalAt macht den
+    // Artikel als "neu erschienen" sichtbar (Badge/Filter), solange er innerhalb des
+    // Aufbewahrungsfensters liegt (siehe NEW_ARRIVAL_WINDOW_DAYS in product-query.ts) - kein
+    // Abgleich gegen eine separate Datei nötig, "neu" heißt schlicht: heute zum ersten Mal gesehen.
     firstSeenImportRunId: runId,
+    newArrivalAt: new Date(),
   };
 
   return { rowNumber, modellErweitert, values };
@@ -196,15 +216,7 @@ export async function importCsvBuffer(
   filename: string,
   options?: ImportOptions,
 ): Promise<ImportResult> {
-  const utf8Content = iconv.decode(buffer, "ISO-8859-1");
-
-  const rows: CsvRow[] = parse(utf8Content, {
-    delimiter: ";",
-    columns: true,
-    skip_empty_lines: true,
-    relax_column_count: true,
-    trim: false,
-  });
+  const rows = decodeAndParseCsv(buffer);
 
   const [run] = await db
     .insert(importRuns)

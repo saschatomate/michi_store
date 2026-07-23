@@ -42,7 +42,39 @@
       "Bash(node test-ftp-sync.mjs)",
       "Bash(node test-ftp-sync-round2.mjs)",
       "Bash(kill %1)",
-      "Bash(pkill -f \"mockftp/server.mjs\")"
+      "Bash(pkill -f \"mockftp/server.mjs\")",
+      "Bash(node test-layout.mjs)",
+      "Bash(node test-layout2.mjs)",
+      "Bash(node test-genimg-lightbox.mjs)",
+      "Bash(rm -f /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/test-layout*.mjs /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/test-genimg-lightbox.mjs)",
+      "Bash(curl -s -o /tmp/sample-gen.png \"https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/22132/1-1784468530916.png\")",
+      "Bash(node test-sidebar-filter.mjs)",
+      "Bash(node test-contain.mjs)",
+      "Bash(curl -s -o /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/style-check/gen-ring.png https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/17009/2-1784158407258.png)",
+      "Bash(curl -s -o /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/style-check/gen-colliers.png https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/21152/1-1784467552746.png)",
+      "Bash(python3 -c \"import datetime; print\\(datetime.datetime.fromtimestamp\\(1784158407\\)\\)\")",
+      "Bash(python3 -c \"import datetime; print\\(datetime.datetime.fromtimestamp\\(1784467552\\)\\)\")",
+      "Bash(curl -sv http://localhost:3000/login)",
+      "Bash(node gen-check.mjs)",
+      "Bash(python3 -c \"import datetime; print\\(datetime.datetime.fromtimestamp\\(1784468377535/1000\\)\\)\")",
+      "Bash(curl -s -o /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/style-check/fresh-ring.png https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/1762/0-1784825182053.png)",
+      "Bash(curl -s -o /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/style-check/fresh-colliers.png https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/21152/0-1784825246853.png)",
+      "Bash(node gen-check2.mjs)",
+      "Bash(curl -s -o /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/style-check/v2-ring.png https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/1762/0-1784825461167.png)",
+      "Bash(curl -s -o /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/style-check/v2-colliers.png https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/21152/0-1784825536524.png)",
+      "Bash(curl -s -o /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/style-check/v2-ohrschmuck.png https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/18320/0-1784825629406.png)",
+      "Bash(rm -f /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/gen-check*.mjs *)",
+      "Bash(curl -sv --connect-timeout 10 --user \"inzingeradm:phH2JK8cUu4SAa5F\" \"ftp://195.4.159.226/\")",
+      "Bash(curl -s --connect-timeout 10 --user \"inzingeradm:phH2JK8cUu4SAa5F\" \"ftp://195.4.159.226/items_dg_Stockware40.csv\" -r 0-1500)",
+      "Bash(iconv -f ISO-8859-1 -t UTF-8)",
+      "Bash(python3 -c ' *)",
+      "Bash(time curl -s http://localhost:3000/api/cron/daily-sync -H \"Authorization: Bearer 1oapS5QiUyCYxL8/sE2aYZdS2WTC6EeKEK7Mr9noiZM=\" -o /tmp/sync-result.json -w \"HTTP %{http_code}\\\\n\")",
+      "Bash(python3 -m json.tool /tmp/sync-result.json)",
+      "Bash(node verify-real-sync.mjs)",
+      "Bash(rm -f /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/verify-real-sync.mjs *)"
+    ],
+    "additionalDirectories": [
+      "/private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad"
     ]
   }
 }

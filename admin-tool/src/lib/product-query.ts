@@ -3,6 +3,18 @@ import { sourceProducts, STATUS_VALUES, type ProductStatus } from "@/db/schema";
 
 export const PAGE_SIZE = 30;
 
+// "Neu erschienen" heißt: die SKU wurde innerhalb der letzten NEW_ARRIVAL_WINDOW_DAYS Tage zum
+// ersten Mal importiert (newArrivalAt wird nur bei Erstanlage gesetzt, siehe csv-import.ts) - kein
+// Abgleich gegen eine separate Datei nötig, das Badge verschwindet einfach automatisch, sobald das
+// Fenster abgelaufen ist. 40 Tage angelehnt an den Namen der täglichen Diamond-Group-Datei.
+export const NEW_ARRIVAL_WINDOW_DAYS = 40;
+
+export function isNewArrival(newArrivalAt: Date | null): boolean {
+  if (!newArrivalAt) return false;
+  const windowMs = NEW_ARRIVAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  return newArrivalAt.getTime() > Date.now() - windowMs;
+}
+
 export type ProductFilters = {
   q?: string;
   kategorie1?: string;
@@ -108,7 +120,9 @@ export function buildWhere(filters: ProductFilters): SQL | undefined {
 
   if (filters.status) conditions.push(eq(sourceProducts.status, filters.status));
 
-  if (filters.newArrivalOnly) conditions.push(isNotNull(sourceProducts.newArrivalAt));
+  if (filters.newArrivalOnly) {
+    conditions.push(gte(sourceProducts.newArrivalAt, sql`now() - interval '${sql.raw(String(NEW_ARRIVAL_WINDOW_DAYS))} days'`));
+  }
   if (filters.missingOnly) conditions.push(isNotNull(sourceProducts.missingFromStockAt));
 
   return conditions.length > 0 ? and(...conditions) : undefined;
