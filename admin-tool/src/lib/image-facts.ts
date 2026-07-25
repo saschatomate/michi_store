@@ -4,22 +4,13 @@ export type BodyPartMapping = {
   bodyPart: string;
   compositionHint: string;
   size: ImageSize;
-  // Rein fotografische Stil-Referenz (Beleuchtung/Bildausschnitt/Komposition) - bewusst nur
-  // unbrandete, generische Schmuckdesigns ohne sichtbares Logo oder ikonisches Markenmotiv
-  // ausgewählt. Das abgebildete Schmuckstück kommt in jedem Fall ausschließlich aus dem
-  // Produkt-Referenzfoto, nie aus diesem Stilbild - siehe Prompt-Anweisung in image-generation.ts.
-  styleReferenceUrl?: string;
 };
-
-const STYLE_REFERENCE_BASE =
-  "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/style-references";
 
 // Kategorie-Verteilung im Katalog (Stand Import): Ring 3869, Ohrschmuck 2311, Colliers 1440,
 // Armbänder 596, Anhänger 472, Armreifen 177, Manschettenknöpfe 3, Schließen 1.
 const BODY_PART_BY_HAUPTKATEGORIE: Record<string, BodyPartMapping> = {
   Ring: {
     bodyPart: "eine Hand",
-    styleReferenceUrl: `${STYLE_REFERENCE_BASE}/ring.webp`,
     compositionHint:
       "Nahaufnahme mit großzügigerem, elegantem Ausschnitt statt extrem eng zugeschnitten: Hand " +
       "nahe Schlüsselbein/Kinn, dabei deutlich sichtbares Kinn, Hals, Schulteransatz und ein Teil " +
@@ -33,7 +24,6 @@ const BODY_PART_BY_HAUPTKATEGORIE: Record<string, BodyPartMapping> = {
   },
   Ohrschmuck: {
     bodyPart: "ein Ohr",
-    styleReferenceUrl: `${STYLE_REFERENCE_BASE}/ohrschmuck.webp`,
     compositionHint:
       "Nahaufnahme mit großzügigerem, elegantem Ausschnitt statt extrem eng zugeschnitten: Ohr, " +
       "Kieferlinie/Wange, Hals und ein Teil der Schulter/Kleidung sichtbar, Kopf leicht seitlich " +
@@ -44,33 +34,28 @@ const BODY_PART_BY_HAUPTKATEGORIE: Record<string, BodyPartMapping> = {
   },
   Colliers: {
     bodyPart: "Hals und Dekolleté",
-    styleReferenceUrl: `${STYLE_REFERENCE_BASE}/halskette.webp`,
     compositionHint:
       "Beauty-Nahaufnahme mit großzügigerem Ausschnitt, elegant statt extrem eng zugeschnitten: " +
       "unterer Gesichtsbereich (Nase/Mund/Kinn, am oberen Bildrand angeschnitten - KEIN vollständiges " +
       "Gesicht), dazu deutlich sichtbare Haare an der Seite des Kopfes, Hals und oberes Dekolleté. " +
-      "Kamera nahezu frontal mit leichtem Winkel. Kragen oder Ausschnitt der Kleidung (z.B. " +
-      "Hemdkragen oder Blazer-Revers, schlicht und neutral in Schwarz oder Weiß) am unteren Bildrand " +
-      "sichtbar und Teil der Komposition. " +
+      "Kamera nahezu frontal mit leichtem Winkel. Kragen oder Ausschnitt der Kleidung am unteren " +
+      "Bildrand sichtbar und Teil der Komposition. " +
       "Schmuckstück auf der Haut liegend scharf im Fokus, alles andere leicht weich",
     size: "1024x1536",
   },
   Anhänger: {
     bodyPart: "Hals und Dekolleté",
-    styleReferenceUrl: `${STYLE_REFERENCE_BASE}/halskette.webp`,
     compositionHint:
       "Beauty-Nahaufnahme mit großzügigerem Ausschnitt, elegant statt extrem eng zugeschnitten: " +
       "unterer Gesichtsbereich (Nase/Mund/Kinn, am oberen Bildrand angeschnitten - KEIN vollständiges " +
       "Gesicht), dazu deutlich sichtbare Haare an der Seite des Kopfes, Hals und oberes Dekolleté. " +
-      "Kamera nahezu frontal mit leichtem Winkel. Kragen oder Ausschnitt der Kleidung (z.B. " +
-      "Hemdkragen oder Blazer-Revers, schlicht und neutral in Schwarz oder Weiß) am unteren Bildrand " +
-      "sichtbar und Teil der Komposition. " +
+      "Kamera nahezu frontal mit leichtem Winkel. Kragen oder Ausschnitt der Kleidung am unteren " +
+      "Bildrand sichtbar und Teil der Komposition. " +
       "Anhänger an einer Kette auf der Haut liegend scharf im Fokus, alles andere leicht weich",
     size: "1024x1536",
   },
   Armbänder: {
     bodyPart: "ein Handgelenk",
-    styleReferenceUrl: `${STYLE_REFERENCE_BASE}/armreif.webp`,
     compositionHint:
       "Nahaufnahme mit großzügigerem, elegantem Ausschnitt statt extrem eng zugeschnitten: " +
       "Handgelenk, Unterarm und deutlich sichtbarer Schulter-/Kleidungsbereich mit im Bild, oft in " +
@@ -85,7 +70,6 @@ const BODY_PART_BY_HAUPTKATEGORIE: Record<string, BodyPartMapping> = {
   },
   Armreifen: {
     bodyPart: "ein Handgelenk",
-    styleReferenceUrl: `${STYLE_REFERENCE_BASE}/armreif.webp`,
     compositionHint:
       "Nahaufnahme mit großzügigerem, elegantem Ausschnitt statt extrem eng zugeschnitten: " +
       "Handgelenk, Unterarm und deutlich sichtbarer Schulter-/Kleidungsbereich mit im Bild, oft in " +
@@ -112,46 +96,136 @@ export function bodyPartMapping(hauptkategorie: string | null): BodyPartMapping 
   return BODY_PART_BY_HAUPTKATEGORIE[hauptkategorie] ?? null;
 }
 
-export type HandPreset = {
+// --- MARINELL Model DNA -----------------------------------------------------------------------
+// Vier feste, wiederkehrende Kampagnen-Models (aus "02 MARINELL Model DNA.docx") ersetzen die
+// frühere zufällige Hautton-/Handform-Diversität. Jedes Produkt bekommt genau eines davon fest
+// zugewiesen (siehe assignModel/sourceProducts.assignedModelKey) - dasselbe Produkt zeigt bei jeder
+// Neu-Generierung immer dasselbe Model. gpt-image-1.5 hat keinen Gesichts-/Charakter-Lock (kein
+// Seed-Replay) - Konsistenz wird über zwei Hebel angenähert: (1) diese fest wiederverwendete,
+// sehr detaillierte Beschreibung, (2) ein echtes Referenzfoto des Models als zweites Eingabebild
+// in generateProductImageVariant (image-generation.ts) - absolute Pixel-Identität über
+// Generierungen hinweg ist damit nicht garantierbar, nur bestmöglich angenähert.
+export type ModelKey = "sophia" | "claire" | "jen" | "amara";
+
+export type MarinellModel = {
+  key: ModelKey;
+  name: string;
+  referenceImageUrl: string;
+  physicalDescription: string;
+};
+
+const MODEL_REFERENCE_BASE =
+  "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/model-references";
+
+export const MARINELL_MODELS: Record<ModelKey, MarinellModel> = {
+  sophia: {
+    key: "sophia",
+    name: "Sophia",
+    referenceImageUrl: `${MODEL_REFERENCE_BASE}/sophia.png`,
+    physicalDescription:
+      "Europäische Frau, 33 Jahre, 172cm, schlanke, sportliche Figur mit langen eleganten " +
+      "Proportionen. Mittelbraune Haare mit seidigem Glanz, große weiche Wellen, Mittelscheitel, " +
+      "Brustlänge, niemals streng frisiert. Haselnussfarbene, warme, leicht mandelförmige Augen mit " +
+      "ruhigem Blick. Leicht gebräunte Haut mit goldenem Unterton, natürlicher Porenstruktur, " +
+      "dezenten Sommersprossen - keine übertriebene Beauty-Retusche, keine makellose Plastikhaut. " +
+      "Natürliche, roséfarbene, weiche Lippen. Ovales Gesicht mit hohen Wangenknochen, weicher " +
+      "Kieferlinie, symmetrisch, aber nie künstlich perfekt. Ruhige, intelligente, warmherzige " +
+      "Ausstrahlung.",
+  },
+  claire: {
+    key: "claire",
+    name: "Claire",
+    referenceImageUrl: `${MODEL_REFERENCE_BASE}/claire.png`,
+    physicalDescription:
+      "Europäische Frau, 31 Jahre, 174cm. Honigblonde Haare mit natürlichen Beach Waves und " +
+      "sommerlicher Bewegung. Hellblaue bis graublaue Augen. Golden gebräunte Haut mit sichtbaren " +
+      "Sommersprossen und gesunder natürlicher Hautstruktur, keine künstliche Retusche. Leicht " +
+      "markante Wangen, strahlendes Lächeln. Offene, lebensfrohe, stilvolle, charismatische " +
+      "Ausstrahlung.",
+  },
+  jen: {
+    key: "jen",
+    name: "Jen",
+    referenceImageUrl: `${MODEL_REFERENCE_BASE}/jen.png`,
+    physicalDescription:
+      "Ostasiatische Frau, 32 Jahre, 170cm. Tiefschwarze Haare mit seidigem Glanz, Long Bob mit " +
+      "Pony oder gerade lange Haare. Dunkelbraune, ruhige, präzise, intelligente Augen. Warmer " +
+      "Goldton der Haut mit perfekter natürlicher Struktur, kein Photoshop-Look. Natürliche, " +
+      "warm-nude Lippen. Feine Gesichtszüge, elegante Kieferlinie, hohe Wangenknochen, ruhige " +
+      "Mimik. Intelligente, diskrete, ästhetische, selbstbewusste Ausstrahlung.",
+  },
+  amara: {
+    key: "amara",
+    name: "Amara",
+    referenceImageUrl: `${MODEL_REFERENCE_BASE}/amara.png`,
+    physicalDescription:
+      "Frau mit südafrikanischen Wurzeln, 38 Jahre, 178cm, sehr schlanke, lange elegante " +
+      "athletische Silhouette mit weichen femininen Linien. Natürlich tiefschwarze, voluminöse, " +
+      "definierte Locken (moderner Afro-Look oder weiche natürliche Locken), gesund, seidig " +
+      "glänzend, niemals künstlich gestylt. Dunkelbraune, ruhige, intensive, sehr ausdrucksstarke " +
+      "Augen. Tiefer, warmer Ebenholzton der Haut mit goldenen Untertönen, natürliche " +
+      "Hautstruktur mit sichtbaren Poren, feiner Glow durch Licht, keine übermäßige Retusche oder " +
+      "künstliche Weichzeichnung. Hohe Wangenknochen, klare Kieferlinie, volle Lippen, elegante " +
+      "Nase, harmonische Proportionen - eine Schönheit mit Charakter statt Perfektion. " +
+      "Selbstbewusste, gelassene, würdevolle, präsente Ausstrahlung, ohne dominant zu wirken.",
+  },
+};
+
+type ModelAssignmentInput = {
+  hauptkategorie: string | null;
+  giaZertifikatNr: string | null;
+  caratur: number | null;
+};
+
+// Deterministische Kategorie-Zuordnung nach der in der Model-DNA-Doku selbst beschriebenen
+// Rollenverteilung (Sophia = klassisches Vertrauen/Fine Jewellery, Claire = Leichtigkeit/Everyday,
+// Jen = Präzision/urbane Eleganz, Amara = außergewöhnliche Einzelstücke/High Jewellery). Wird nur
+// beim allerersten Generieren eines Produkts aufgerufen - danach greift immer
+// sourceProducts.assignedModelKey (siehe image-actions.ts), damit die Zuordnung stabil bleibt, auch
+// wenn sich diese Regel später ändert.
+export function assignModel(product: ModelAssignmentInput): ModelKey {
+  if (product.giaZertifikatNr && product.caratur !== null && product.caratur >= 1.0) {
+    return "amara";
+  }
+  switch (product.hauptkategorie) {
+    case "Ohrschmuck":
+      return "jen";
+    case "Armbänder":
+    case "Armreifen":
+      return "claire";
+    case "Ring":
+    case "Anhänger":
+    case "Colliers":
+    default:
+      return "sophia";
+  }
+}
+
+export type PoseVariant = {
   key: string;
   label: string;
   promptDescriptor: string;
 };
 
-// Hautton und Handform/-größe sind zwei unabhängige Achsen - werden pro Generierungslauf zufällig
-// gemischt und gepaart, damit keine feste Korrelation entsteht (z.B. "dunkler Hautton = kräftiger").
-const SKIN_TONES = [
-  { key: "hell", label: "Heller Hautton", descriptor: "hellem Hautton" },
-  { key: "mittel", label: "Mittlerer Hautton", descriptor: "mittlerem, warmem Hautton" },
-  { key: "dunkel", label: "Dunkler Hautton", descriptor: "dunklem Hautton" },
+// Drei feste Posen (aus den in der Doku gelisteten "Lieblingsperspektiven", modellübergreifend
+// anwendbar) - ersetzen die frühere Hautton-/Handform-Zufallsvariation. Alle 3 Varianten eines
+// Produkts zeigen dasselbe zugewiesene Model, nur Blickwinkel/Pose unterscheiden sich.
+export const POSE_VARIANTS: PoseVariant[] = [
+  {
+    key: "dreiviertelprofil",
+    label: "Dreiviertelprofil",
+    promptDescriptor:
+      "Dreiviertelprofil, Kopf leicht gedreht, Hand elegant nahe Gesicht oder Schlüsselbein positioniert",
+  },
+  {
+    key: "frontal",
+    label: "Frontal",
+    promptDescriptor: "frontale Nahaufnahme mit direktem, ruhigem Blick in die Kamera",
+  },
+  {
+    key: "seitlich",
+    label: "Seitlich",
+    promptDescriptor:
+      "Portrait mit Blick leicht nach unten oder zur Seite, Hand am Hals oder im Haar",
+  },
 ];
-
-const HAND_BUILDS = [
-  { key: "schlank", label: "schlank", descriptor: "eine schlanke Hand/Körperpartie" },
-  { key: "durchschnittlich", label: "durchschnittlich", descriptor: "eine durchschnittlich gebaute Hand/Körperpartie" },
-  { key: "kraeftiger", label: "kräftiger", descriptor: "eine kräftigere, vollere Hand/Körperpartie" },
-];
-
-function shuffled<T>(items: T[]): T[] {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
-
-// Erzeugt 3 Presets mit unabhängig zufällig gepaartem Hautton und Handform - bei jedem Aufruf neu
-// gemischt, auch bei "Neu generieren".
-export function randomHandPresets(): HandPreset[] {
-  const tones = shuffled(SKIN_TONES);
-  const builds = shuffled(HAND_BUILDS);
-  return tones.map((tone, i) => {
-    const build = builds[i];
-    return {
-      key: `${tone.key}_${build.key}`,
-      label: `${tone.label}, ${build.label}`,
-      promptDescriptor: `${build.descriptor} mit ${tone.descriptor}`,
-    };
-  });
-}

@@ -1,27 +1,32 @@
 import "server-only";
 import OpenAI, { toFile } from "openai";
 import type { sourceProducts } from "@/db/schema";
-import { bodyPartMapping, type HandPreset } from "@/lib/image-facts";
+import { bodyPartMapping, assignModel, MARINELL_MODELS, type MarinellModel, type PoseVariant } from "@/lib/image-facts";
 
 type SourceProductRow = typeof sourceProducts.$inferSelect;
 
-// Editorial-Luxus-Schmuckfotografie im Stil großer Schmuckhäuser wie Tiffany & Co.: großzügiger,
-// eleganter Bildausschnitt, der spürbar mehr vom Model zeigt als ein reines Produkt-Makrofoto -
-// keine isolierte Hand/Ohr/Hals-Nahaufnahme vor leerem Hintergrund. Geringe Schärfentiefe, weicher
-// neutraler Studio-Hintergrund, kein Model-Casting-Foto.
+// MARINELL Editorial-Fotografie (aus "01 MARINELL Brand DNA.docx"): leise, warme, zeitlose
+// Bildsprache statt lauter Statussymbolik. Großzügiger, eleganter Bildausschnitt, der spürbar mehr
+// vom Model zeigt als ein reines Produkt-Makrofoto - keine isolierte Hand/Ohr/Hals-Nahaufnahme vor
+// leerem Hintergrund.
 const SYSTEM_INSTRUCTIONS =
-  "Editorial-Luxus-Schmuckfotografie im Stil großer Schmuckhäuser wie Tiffany & Co. Großzügiger, " +
-  "eleganter Bildausschnitt, der deutlich mehr vom Model zeigt als eine isolierte Nahaufnahme nur " +
-  "des Schmuckstücks - je nach Schmuckart z.B. Teile von Kinn/Mund, Hals, Schulter, Dekolleté oder " +
-  "Oberkörper mit im Bild, dazu passende schlichte Kleidung, exakt wie in den Beispielbildern " +
-  "großer Schmuckhäuser wie Tiffany & Co. Das Schmuckstück bleibt scharf im Fokus, alles andere " +
-  "(Haare, Hintergrund, entferntere Hautpartien) durch geringe Schärfentiefe (Bokeh) leicht " +
-  "unscharf. Weicher, neutraler, warmgrauer Studio-Hintergrund ohne sichtbare Struktur oder " +
-  "Requisiten. Weiches, diffuses Studiolicht mit sanften Schatten, keine harten Reflexe. Kein " +
-  "vollständiges Gesicht im Bild (Augen bleiben außerhalb des Bildausschnitts), ruhige, " +
-  "unaufdringliche Ausstrahlung. Minimale, neutrale Kleidung (z.B. schlichtes weißes Hemd oder " +
-  "schwarzer Rollkragenpullover), die nicht vom Schmuckstück ablenkt. " +
-  "Natürliche, warme Hauttöne, ruhige editorial Farbgebung mit sanftem Kontrast. Kein Text, kein " +
+  "MARINELL Editorial-Luxus-Schmuckfotografie: 'Luxury, lived discreetly' - die Bildsprache ist " +
+  "leise, ruhig, nie laut oder aufdringlich. Sie transportiert Ruhe, Eleganz, Wärme, Vertrauen und " +
+  "Zeitlosigkeit - NICHT Status, Reichtum oder Dekadenz. Großzügiger, eleganter Bildausschnitt, " +
+  "der deutlich mehr vom Model zeigt als eine isolierte Nahaufnahme nur des Schmuckstücks - je " +
+  "nach Schmuckart z.B. Teile von Kinn/Mund, Hals, Schulter, Dekolleté oder Oberkörper mit im " +
+  "Bild. Das Schmuckstück bleibt scharf im Fokus, alles andere (Haare, Hintergrund, entferntere " +
+  "Hautpartien) durch geringe Schärfentiefe (Bokeh) leicht unscharf. Hintergrund: champagnerfarbener " +
+  "Seiden-/Satinvorhang mit weichen Falten, oder alternativ ein warmer, heller Sandton-Studiohintergrund " +
+  "ohne sichtbare Struktur oder Requisiten - Farbwelt durchgehend Ivory, Champagne, Warm Sand, " +
+  "Cashmere, Black, Warm Gold, Soft Taupe. Licht: warmes 'Golden Hour'/Champagnerlicht - großes, " +
+  "weiches Beauty-Light von links oben, warme Farbtemperatur, feines Kantenlicht, sanfte Schatten, " +
+  "keine harten Reflexe. Kein vollständiges Gesicht im Bild (Augen bleiben außerhalb des " +
+  "Bildausschnitts), ruhige, unaufdringliche Ausstrahlung. Kleidung: schwarzes Seiden-Slip-Kleid, " +
+  "champagnerfarbenes Satinkleid oder cremefarbener Kaschmir/Blazer - schlicht, ohne Muster oder " +
+  "Logos, die nicht vom Schmuckstück ablenken. Natürliche Retusche: echte Hautstruktur mit " +
+  "sichtbaren Poren und ggf. dezenten Sommersprossen bleibt erhalten, keine Plastikhaut, keine " +
+  "übertriebene Beauty-Retusche. Ruhige editorial Farbgebung mit sanftem Kontrast. Kein Text, kein " +
   "Logo, kein Wasserzeichen im Bild. Kein weiterer Schmuck außer dem abgebildeten Referenzstück " +
   "sichtbar. Verändere das Schmuckstück selbst NICHT - Form, Fassung, Steinanzahl und Material " +
   "müssen exakt wie im Referenzbild bleiben. Spiegle oder drehe das Schmuckstück NICHT - " +
@@ -58,20 +63,30 @@ async function fetchImageBuffer(url: string): Promise<Buffer> {
   return Buffer.from(arrayBuffer);
 }
 
-// Der Basis-Prompt (ohne Hautton-/Handform-Zusatz, der pro Variante wechselt) - wird sowohl für die
-// echte Generierung als auch zum Vorausfüllen der Prompt-Bearbeiten-Ansicht in der UI verwendet.
+// Löst das für ein Produkt geltende MARINELL-Model auf - bevorzugt die dauerhaft gespeicherte
+// Zuweisung (sourceProducts.assignedModelKey), sonst die Live-Berechnung (z.B. für die
+// Prompt-Vorschau, bevor überhaupt einmal generiert wurde).
+export function resolveModel(product: SourceProductRow): MarinellModel {
+  const key = (product.assignedModelKey as MarinellModel["key"] | null) ?? assignModel(product);
+  return MARINELL_MODELS[key];
+}
+
+// Der Basis-Prompt (ohne Pose-Zusatz, der pro Variante wechselt) - wird sowohl für die echte
+// Generierung als auch zum Vorausfüllen der Prompt-Bearbeiten-Ansicht in der UI verwendet.
 export function defaultImageBasePrompt(product: SourceProductRow): string {
   const mapping = bodyPartMapping(product.hauptkategorie);
   if (!mapping) return "";
+  const model = resolveModel(product);
   return (
-    `${SYSTEM_INSTRUCTIONS} Setze DIESES Schmuckstück (aus dem Referenzbild) unverändert auf ` +
-    `${mapping.bodyPart}. ${mapping.compositionHint}.`
+    `${SYSTEM_INSTRUCTIONS} Das Model in diesem Bild: ${model.physicalDescription} Setze DIESES ` +
+    `Schmuckstück (aus dem Referenzbild) unverändert auf ${mapping.bodyPart}. ${mapping.compositionHint}.`
   );
 }
 
 export async function generateProductImageVariant(
   product: SourceProductRow,
-  preset: HandPreset,
+  model: MarinellModel,
+  poseVariant: PoseVariant,
 ): Promise<{ buffer: Buffer; prompt: string }> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -95,32 +110,28 @@ export async function generateProductImageVariant(
 
   const basePrompt = product.imagePromptOverride?.trim() || defaultImageBasePrompt(product);
 
-  // Optionale zweite Referenz (nur Foto-Stil: Pose, Licht, Bildausschnitt, Model-Qualität) - das
-  // dort abgebildete Schmuckstück gehört einer anderen Marke und darf in keiner Form übernommen
-  // werden. Nur unbrandete, generische Auswahl verwendet (siehe styleReferenceUrl-Kommentar in
-  // image-facts.ts). Ohne Override, da eine individuelle Prompt-Anpassung diese Anweisung nicht
+  // Zweite Referenz: ein echtes Foto des zugewiesenen MARINELL-Models, ausschließlich für
+  // Gesicht/Haartyp/Hautunterton/Foto-Stil. Das auf diesem Referenzfoto sichtbare Schmuckstück
+  // gehört zu einer anderen Aufnahme dieses Models und darf in keiner Form übernommen werden - der
+  // Mechanismus ist identisch zur früheren Stilreferenz, nur jetzt mit markeneigenen Fotos statt
+  // einer fremden Marke. Ohne Override, da eine individuelle Prompt-Anpassung diese Anweisung nicht
   // versehentlich verlieren darf.
-  const images = [referenceFile];
-  let stylePromptAddition = "";
-  if (mapping.styleReferenceUrl) {
-    const styleBuffer = await fetchImageBuffer(mapping.styleReferenceUrl);
-    const styleFile = await toFile(styleBuffer, "style-reference", {
-      type: guessMimeType(mapping.styleReferenceUrl),
-    });
-    images.push(styleFile);
-    stylePromptAddition =
-      " Dir werden ZWEI Bilder gegeben. Das ERSTE Bild zeigt das tatsächliche Schmuckstück, das " +
-      "unverändert dargestellt werden muss. Das ZWEITE Bild zeigt eine andere Schmuckmarke auf " +
-      "einem Model und dient AUSSCHLIESSLICH als fotografische Stilreferenz: Pose, Kamerawinkel, " +
-      "Bildausschnitt, Beleuchtung, Hautwiedergabe und allgemeine Bildqualität. Übernimm aus dem " +
-      "zweiten Bild NIEMALS das dort abgebildete Schmuckstück, dessen Design, Form, Logo, Gravur " +
-      "oder Markenzeichen - das im generierten Bild sichtbare Schmuckstück muss zu 100% aus dem " +
-      "ERSTEN Bild stammen.";
-  }
+  const styleBuffer = await fetchImageBuffer(model.referenceImageUrl);
+  const styleFile = await toFile(styleBuffer, "model-reference", {
+    type: guessMimeType(model.referenceImageUrl),
+  });
+  const images = [referenceFile, styleFile];
+  const stylePromptAddition =
+    ` Dir werden ZWEI Bilder gegeben. Das ERSTE Bild zeigt das tatsächliche Schmuckstück, das ` +
+    `unverändert dargestellt werden muss. Das ZWEITE Bild zeigt das Model ${model.name} auf einer ` +
+    `anderen Aufnahme und dient AUSSCHLIESSLICH als Referenz für Gesicht, Haare, Hautunterton und ` +
+    `fotografischen Stil (Pose, Kamerawinkel, Licht, Bildqualität). Übernimm aus dem zweiten Bild ` +
+    `NIEMALS das dort abgebildete Schmuckstück, dessen Design, Form oder Fassung - das im ` +
+    `generierten Bild sichtbare Schmuckstück muss zu 100% aus dem ERSTEN Bild stammen.`;
 
   const prompt =
-    `${basePrompt}${stylePromptAddition} Zeige ${preset.promptDescriptor}. Hohe Auflösung, scharfer ` +
-    `Fokus auf das Schmuckstück.`;
+    `${basePrompt}${stylePromptAddition} Zeige ${poseVariant.promptDescriptor}. Hohe Auflösung, ` +
+    `scharfer Fokus auf das Schmuckstück.`;
 
   // gpt-image-Modelle haben ein niedriges Per-Minute-Rate-Limit für Edit-Aufrufe; bei 3 parallelen
   // Varianten pro Produkt reicht das SDK-Default (2 Retries) oft nicht aus, um einen 429 mit

@@ -1,0 +1,1 @@
+ALTER TABLE "source_products" ADD COLUMN "assigned_model_key" text;

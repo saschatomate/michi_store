@@ -119,6 +119,12 @@ export const sourceProducts = pgTable(
     // automatisch gebaute Prompt korrigiert werden muss (z.B. Innen-/Außenseite bei Armbändern)
     imagePromptOverride: text("image_prompt_override"),
 
+    // Fest zugewiesenes MARINELL-Model (sophia|claire|jen|amara, siehe image-facts.ts) - einmalig
+    // beim ersten Generieren berechnet und danach dauerhaft beibehalten, damit dasselbe Produkt bei
+    // jeder Neu-Generierung garantiert dasselbe Model zeigt, auch wenn sich die Zuordnungsregel oder
+    // Kategoriedaten später ändern.
+    assignedModelKey: text("assigned_model_key"),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

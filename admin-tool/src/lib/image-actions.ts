@@ -8,13 +8,26 @@ import { requireAuth } from "@/lib/dal";
 import { generateProductImageVariant } from "@/lib/image-generation";
 import { signGeneratedImage } from "@/lib/c2pa-sign";
 import { uploadGeneratedImage, deleteGeneratedImage } from "@/lib/image-storage";
-import { randomHandPresets, type HandPreset } from "@/lib/image-facts";
+import { assignModel, MARINELL_MODELS, POSE_VARIANTS, type MarinellModel, type PoseVariant } from "@/lib/image-facts";
 
 type SourceProductRow = typeof sourceProducts.$inferSelect;
 
+// Löst das zugewiesene Model auf und persistiert es beim allerersten Aufruf für dieses Produkt
+// dauerhaft (sourceProducts.assignedModelKey), damit spätere Neu-Generierungen garantiert dasselbe
+// Model verwenden, auch wenn sich die Zuordnungsregel (assignModel) später ändert.
+async function resolveAndPersistModel(product: SourceProductRow): Promise<MarinellModel> {
+  if (product.assignedModelKey) {
+    return MARINELL_MODELS[product.assignedModelKey as MarinellModel["key"]];
+  }
+  const key = assignModel(product);
+  await db.update(sourceProducts).set({ assignedModelKey: key }).where(eq(sourceProducts.id, product.id));
+  return MARINELL_MODELS[key];
+}
+
 async function generateAndSaveVariant(
   product: SourceProductRow,
-  preset: HandPreset,
+  model: MarinellModel,
+  poseVariant: PoseVariant,
   variantIndex: number,
 ): Promise<void> {
   const existing = await db.query.productGeneratedImages.findFirst({
@@ -27,8 +40,10 @@ async function generateAndSaveVariant(
   // nicht versehentlich überschrieben wird.
   if (existing?.status === "approved") return;
 
+  const label = `${model.name} – ${poseVariant.label}`;
+
   try {
-    const { buffer, prompt } = await generateProductImageVariant(product, preset);
+    const { buffer, prompt } = await generateProductImageVariant(product, model, poseVariant);
     const signed = await signGeneratedImage(buffer, prompt);
     const path = `generated/${product.id}/${variantIndex}-${Date.now()}.png`;
     const { url } = await uploadGeneratedImage(signed, path);
@@ -41,7 +56,7 @@ async function generateAndSaveVariant(
       await db
         .update(productGeneratedImages)
         .set({
-          handPreset: preset.label,
+          handPreset: label,
           imageUrl: url,
           storagePath: path,
           status: "pending_review",
@@ -54,7 +69,7 @@ async function generateAndSaveVariant(
       await db.insert(productGeneratedImages).values({
         sourceProductId: product.id,
         variantIndex,
-        handPreset: preset.label,
+        handPreset: label,
         imageUrl: url,
         storagePath: path,
         status: "pending_review",
@@ -76,7 +91,7 @@ async function generateAndSaveVariant(
       await db.insert(productGeneratedImages).values({
         sourceProductId: product.id,
         variantIndex,
-        handPreset: preset.label,
+        handPreset: label,
         status: "pending_review",
         generationError: message,
       });
@@ -91,7 +106,10 @@ export async function generateProductImages(id: number): Promise<void> {
   const product = await db.query.sourceProducts.findFirst({ where: eq(sourceProducts.id, id) });
   if (!product) throw new Error("Artikel nicht gefunden.");
 
-  await Promise.all(randomHandPresets().map((preset, i) => generateAndSaveVariant(product, preset, i)));
+  const model = await resolveAndPersistModel(product);
+  await Promise.all(
+    POSE_VARIANTS.map((poseVariant, i) => generateAndSaveVariant(product, model, poseVariant, i)),
+  );
 
   revalidatePath(`/products/${id}`);
 }
@@ -158,9 +176,9 @@ export async function deleteProductImageVariant(imageId: number): Promise<void> 
   revalidatePath(`/products/${row.sourceProductId}`);
 }
 
-// Generiert nur diese eine Variante neu (frischer, zufälliger Hautton/Handform-Preset), lässt die
-// anderen 2 Varianten unangetastet - anders als die pauschale "Neu generieren"-Aktion im Header, die
-// alle nicht-freigegebenen Varianten gleichzeitig ersetzt.
+// Generiert nur diese eine Variante neu (gleiches zugewiesenes Model, gleiche Pose wie der Slot es
+// vorsieht), lässt die anderen 2 Varianten unangetastet - anders als die pauschale
+// "Neu generieren"-Aktion im Header, die alle nicht-freigegebenen Varianten gleichzeitig ersetzt.
 export async function regenerateProductImageVariant(imageId: number): Promise<void> {
   await requireAuth();
   const row = await db.query.productGeneratedImages.findFirst({
@@ -173,8 +191,9 @@ export async function regenerateProductImageVariant(imageId: number): Promise<vo
   });
   if (!product) throw new Error("Artikel nicht gefunden.");
 
-  const [preset] = randomHandPresets();
-  await generateAndSaveVariant(product, preset, row.variantIndex);
+  const model = await resolveAndPersistModel(product);
+  const poseVariant = POSE_VARIANTS[row.variantIndex] ?? POSE_VARIANTS[0];
+  await generateAndSaveVariant(product, model, poseVariant, row.variantIndex);
 
   revalidatePath(`/products/${row.sourceProductId}`);
 }

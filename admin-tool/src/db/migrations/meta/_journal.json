@@ -43,6 +43,13 @@
       "when": 1784808892948,
       "tag": "0005_needy_mandarin",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785013637037,
+      "tag": "0006_free_moonstone",
+      "breakpoints": true
     }
   ]
 }

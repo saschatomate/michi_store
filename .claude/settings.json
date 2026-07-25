@@ -71,10 +71,39 @@
       "Bash(time curl -s http://localhost:3000/api/cron/daily-sync -H \"Authorization: Bearer 1oapS5QiUyCYxL8/sE2aYZdS2WTC6EeKEK7Mr9noiZM=\" -o /tmp/sync-result.json -w \"HTTP %{http_code}\\\\n\")",
       "Bash(python3 -m json.tool /tmp/sync-result.json)",
       "Bash(node verify-real-sync.mjs)",
-      "Bash(rm -f /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/verify-real-sync.mjs *)"
+      "Bash(rm -f /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/verify-real-sync.mjs *)",
+      "Bash(find /Users/saschas/Documents/repos/Michi -iname \"*brand*\" -o -iname \"*model*dna*\" -o -iname \"*model dna*\" 2>/dev/null | grep -v node_modules | grep -v \"/.git/\" *)",
+      "Read(//Users/saschas/Documents/**)",
+      "Bash(textutil -convert txt \"01 MARINELL Brand DNA.docx\" -output /tmp/brand-dna.txt)",
+      "Bash(textutil -convert txt \"02 MARINELL Model DNA.docx\" -output /tmp/model-dna.txt)",
+      "Bash(python3 -c \"from PIL import Image; print\\('PIL available'\\)\")",
+      "Bash(sips --help)",
+      "Bash(mkdir -p /tmp/model-crop-test)",
+      "Bash(cp \"5bd41f92-83a1-481e-943a-155bf24325bd.png\" /tmp/model-crop-test/amara-orig.png)",
+      "Bash(sips -c 950 1023 --cropOffset 0 0 amara-orig.png --out amara-crop-test.png)",
+      "Bash(sips -g pixelWidth -g pixelHeight amara-crop-test.png)",
+      "Bash(sips -c 100 1023 --cropOffset 0 0 amara-orig.png --out amara-top100.png)",
+      "Bash(sips -c 1000 1023 --cropOffset -268 0 amara-orig.png --out amara-shifted.png)",
+      "Bash(sips -c 950 1023 --cropOffset -150 0 amara-orig.png --out amara-shifted2.png)",
+      "Bash(sips -c 850 1023 --cropOffset -100 0 amara-orig.png --out amara-shifted3.png)",
+      "Bash(sips -c 780 1023 --cropOffset -60 0 amara-orig.png --out amara-final.png)",
+      "Bash(sips -g pixelHeight -g pixelWidth amara-final.png)",
+      "Bash(sips -c 740 1023 --cropOffset 20 0 amara-final.png --out amara-final2.png)",
+      "Bash(SCRATCH=/private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad *)",
+      "Bash(node gen-modeldna-check.mjs)",
+      "Bash(npm install *)",
+      "Bash(npx playwright *)",
+      "Bash(node retry-slot2.mjs)",
+      "Bash(node retry-slot2b.mjs)",
+      "Bash(curl -s -o /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/check-sophia.png https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/20602/0-1785014517406.png)",
+      "Bash(curl -s -o /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/check-jen.png https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/18320/0-1785014586048.png)",
+      "Bash(curl -s -o /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/check-claire.png https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/22132/0-1785014653493.png)",
+      "Bash(curl -s -o /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/check-amara.png https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/181/0-1785014737849.png)",
+      "Bash(node gen-text-check.mjs)"
     ],
     "additionalDirectories": [
-      "/private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad"
+      "/private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad",
+      "/tmp/model-refs-final"
     ]
   }
 }
