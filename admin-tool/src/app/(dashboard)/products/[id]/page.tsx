@@ -12,7 +12,8 @@ import { formatDateTime } from "@/lib/format";
 import { isNewArrival } from "@/lib/product-query";
 import { cardClass } from "@/lib/ui";
 import { diamondSlots, coloredStoneSlots } from "@/lib/product-facts";
-import { defaultImageBasePrompt } from "@/lib/image-generation";
+import { defaultImageBasePrompt, resolveModel } from "@/lib/image-generation";
+import { MARINELL_MODELS, type ModelKey } from "@/lib/image-facts";
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (value === null || value === undefined || value === "") return null;
@@ -246,6 +247,9 @@ export default async function ProductDetailPage({
         images={generatedImages}
         defaultPrompt={defaultImageBasePrompt(product)}
         promptOverride={product.imagePromptOverride}
+        models={Object.values(MARINELL_MODELS)}
+        recommendedModelKey={resolveModel(product).key}
+        currentModelKey={product.assignedModelKey as ModelKey | null}
       />
     </div>
   );

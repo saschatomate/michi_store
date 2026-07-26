@@ -99,24 +99,35 @@ async function generateAndSaveVariant(
   }
 }
 
+async function runAllVariants(product: SourceProductRow, model: MarinellModel): Promise<void> {
+  await Promise.all(
+    POSE_VARIANTS.map((poseVariant, i) => generateAndSaveVariant(product, model, poseVariant, i)),
+  );
+}
+
 // Wird sowohl für die Erstgenerierung als auch für "Neu generieren" verwendet - die Logik ist
 // identisch (ersetzt nur nicht-freigegebene Varianten), nur das Button-Label unterscheidet sich.
-export async function generateProductImages(id: number): Promise<void> {
+// modelKey kommt immer aus der manuellen Modellauswahl (ModelPickerModal) und überschreibt/setzt
+// die dauerhafte Zuweisung - der Nutzer kann das Model pro Produkt bewusst wechseln.
+export async function generateProductImages(id: number, modelKey: MarinellModel["key"]): Promise<void> {
   await requireAuth();
   const product = await db.query.sourceProducts.findFirst({ where: eq(sourceProducts.id, id) });
   if (!product) throw new Error("Artikel nicht gefunden.");
 
-  const model = await resolveAndPersistModel(product);
-  await Promise.all(
-    POSE_VARIANTS.map((poseVariant, i) => generateAndSaveVariant(product, model, poseVariant, i)),
-  );
+  await db.update(sourceProducts).set({ assignedModelKey: modelKey }).where(eq(sourceProducts.id, id));
+  product.assignedModelKey = modelKey;
+
+  await runAllVariants(product, MARINELL_MODELS[modelKey]);
 
   revalidatePath(`/products/${id}`);
 }
 
 // Speichert einen manuellen Prompt-Override (z.B. Korrektur für Innen-/Außenseite bei Armbändern)
 // und generiert direkt neu - ersetzt nur nicht-freigegebene Varianten, wie bei "Neu generieren".
-// Leerer String setzt den Override zurück auf den automatisch gebauten Standard-Prompt.
+// Leerer String setzt den Override zurück auf den automatisch gebauten Standard-Prompt. Nutzt
+// bewusst das bereits zugewiesene (oder automatisch ermittelte) Model, statt erneut zu fragen - die
+// Modellauswahl ist eine bewusste Entscheidung über den ModelPickerModal, nicht Teil des
+// Prompt-Bearbeiten-Flows.
 export async function updateImagePromptOverride(id: number, prompt: string): Promise<void> {
   await requireAuth();
   await db
@@ -124,7 +135,13 @@ export async function updateImagePromptOverride(id: number, prompt: string): Pro
     .set({ imagePromptOverride: prompt.trim() || null, updatedAt: new Date() })
     .where(eq(sourceProducts.id, id));
 
-  await generateProductImages(id);
+  const product = await db.query.sourceProducts.findFirst({ where: eq(sourceProducts.id, id) });
+  if (!product) throw new Error("Artikel nicht gefunden.");
+
+  const model = await resolveAndPersistModel(product);
+  await runAllVariants(product, model);
+
+  revalidatePath(`/products/${id}`);
 }
 
 export async function approveProductImage(imageId: number): Promise<void> {

@@ -112,6 +112,8 @@ export type MarinellModel = {
   name: string;
   referenceImageUrl: string;
   physicalDescription: string;
+  // Kurzbeschreibung für die manuelle Modellauswahl in der UI (nicht Teil des Bild-Prompts).
+  tagline: string;
 };
 
 const MODEL_REFERENCE_BASE =
@@ -121,7 +123,10 @@ export const MARINELL_MODELS: Record<ModelKey, MarinellModel> = {
   sophia: {
     key: "sophia",
     name: "Sophia",
-    referenceImageUrl: `${MODEL_REFERENCE_BASE}/sophia.png`,
+    referenceImageUrl: `${MODEL_REFERENCE_BASE}/sophia.jpg`,
+    tagline:
+      "Ruhiges Vertrauen und klassische Eleganz - mittelbraune Wellen, Haselnussaugen. Das Gesicht " +
+      "für zeitloses Fine Jewellery (Ring, Anhänger, Collier).",
     physicalDescription:
       "Europäische Frau, 33 Jahre, 172cm, schlanke, sportliche Figur mit langen eleganten " +
       "Proportionen. Mittelbraune Haare mit seidigem Glanz, große weiche Wellen, Mittelscheitel, " +
@@ -135,7 +140,10 @@ export const MARINELL_MODELS: Record<ModelKey, MarinellModel> = {
   claire: {
     key: "claire",
     name: "Claire",
-    referenceImageUrl: `${MODEL_REFERENCE_BASE}/claire.png`,
+    referenceImageUrl: `${MODEL_REFERENCE_BASE}/claire.jpg`,
+    tagline:
+      "Mediterrane Leichtigkeit - honigblonde Beach Waves, helle Augen. Das Gesicht für " +
+      "Everyday-Diamonds und Alltagsschmuck (Armband, Armreif).",
     physicalDescription:
       "Europäische Frau, 31 Jahre, 174cm. Honigblonde Haare mit natürlichen Beach Waves und " +
       "sommerlicher Bewegung. Hellblaue bis graublaue Augen. Golden gebräunte Haut mit sichtbaren " +
@@ -146,7 +154,10 @@ export const MARINELL_MODELS: Record<ModelKey, MarinellModel> = {
   jen: {
     key: "jen",
     name: "Jen",
-    referenceImageUrl: `${MODEL_REFERENCE_BASE}/jen.png`,
+    referenceImageUrl: `${MODEL_REFERENCE_BASE}/jen.jpg`,
+    tagline:
+      "Urbane Präzision - dunkler Bob mit Pony, ruhiger Blick. Das Gesicht für moderne " +
+      "High Jewellery und Ohrschmuck.",
     physicalDescription:
       "Ostasiatische Frau, 32 Jahre, 170cm. Tiefschwarze Haare mit seidigem Glanz, Long Bob mit " +
       "Pony oder gerade lange Haare. Dunkelbraune, ruhige, präzise, intelligente Augen. Warmer " +
@@ -157,7 +168,10 @@ export const MARINELL_MODELS: Record<ModelKey, MarinellModel> = {
   amara: {
     key: "amara",
     name: "Amara",
-    referenceImageUrl: `${MODEL_REFERENCE_BASE}/amara.png`,
+    referenceImageUrl: `${MODEL_REFERENCE_BASE}/amara.jpg`,
+    tagline:
+      "Skulpturale Stärke - natürliche Locken, warmer Ebenholzton. Das Gesicht für " +
+      "außergewöhnliche Einzelstücke und High-Carat-Diamanten.",
     physicalDescription:
       "Frau mit südafrikanischen Wurzeln, 38 Jahre, 178cm, sehr schlanke, lange elegante " +
       "athletische Silhouette mit weichen femininen Linien. Natürlich tiefschwarze, voluminöse, " +
