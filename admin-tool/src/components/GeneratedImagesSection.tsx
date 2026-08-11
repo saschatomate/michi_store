@@ -13,6 +13,7 @@ import {
 } from "@/lib/image-actions";
 import { buttonPrimary, buttonSecondary, buttonGhost, cardClass, inputClass } from "@/lib/ui";
 import { Lightbox } from "@/components/Lightbox";
+import { formatUsd } from "@/lib/format";
 import type { GeneratedImageStatus } from "@/db/schema";
 import type { ModelKey } from "@/lib/image-facts";
 
@@ -23,6 +24,10 @@ export type GeneratedImageItem = {
   imageUrl: string | null;
   status: GeneratedImageStatus;
   generationError: string | null;
+  // Kosten des zuletzt für diesen Slot abgeschickten API-Aufrufs (siehe cost-tracking.ts) - null
+  // solange für diese Variante noch nichts geloggt wurde (z.B. alte Bilder vor Einführung des
+  // Kosten-Trackings).
+  costUsd: number | null;
 };
 
 export type ModelOption = {
@@ -182,6 +187,9 @@ function ImageCard({ item }: { item: GeneratedImageItem }) {
             {statusLabel[item.status]}
           </span>
         </div>
+        {item.costUsd !== null && (
+          <p className="text-xs text-zinc-400">ca. {formatUsd(item.costUsd)}</p>
+        )}
         {item.imageUrl && (
           <div className="flex gap-1.5">
             {item.status !== "approved" && (
@@ -261,6 +269,7 @@ export function GeneratedImagesSection({
   const hasImages = images.length > 0;
   const hasCustomPrompt = Boolean(promptOverride);
   const currentModel = models.find((m) => m.key === currentModelKey);
+  const totalCostUsd = images.reduce((sum, img) => sum + (img.costUsd ?? 0), 0);
 
   function startEditPrompt() {
     setDraftPrompt(promptOverride ?? defaultPrompt);
@@ -303,6 +312,9 @@ export function GeneratedImagesSection({
             <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
               Individueller Prompt aktiv
             </span>
+          )}
+          {totalCostUsd > 0 && (
+            <span className="text-xs text-zinc-400">ca. {formatUsd(totalCostUsd)} gesamt</span>
           )}
         </div>
         {!isEditingPrompt && (

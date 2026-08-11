@@ -2,8 +2,11 @@ import "server-only";
 import OpenAI, { toFile } from "openai";
 import type { sourceProducts } from "@/db/schema";
 import { bodyPartMapping, assignModel, MARINELL_MODELS, type MarinellModel, type PoseVariant } from "@/lib/image-facts";
+import { estimateOpenAiImageCost, recordApiUsage } from "@/lib/cost-tracking";
 
 type SourceProductRow = typeof sourceProducts.$inferSelect;
+
+const OPENAI_IMAGE_MODEL = "gpt-image-1.5";
 
 // MARINELL Editorial-Fotografie (aus "01 MARINELL Brand DNA.docx"): leise, warme, zeitlose
 // Bildsprache statt lauter Statussymbolik. Großzügiger, eleganter Bildausschnitt, der spürbar mehr
@@ -87,6 +90,7 @@ export async function generateProductImageVariant(
   product: SourceProductRow,
   model: MarinellModel,
   poseVariant: PoseVariant,
+  variantIndex: number,
 ): Promise<{ buffer: Buffer; prompt: string }> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -140,12 +144,24 @@ export async function generateProductImageVariant(
   const response = await client.images.edit({
     image: images,
     prompt,
-    model: "gpt-image-1.5",
+    model: OPENAI_IMAGE_MODEL,
     size: mapping.size,
     quality: "high",
     input_fidelity: "high",
     output_format: "png",
     n: 1,
+  });
+
+  // Wie bei der Textgenerierung: Kosten werden verbucht, sobald die Antwort da ist, auch wenn
+  // sie aus irgendeinem Grund kein Bild enthält - der Aufruf wurde in jedem Fall bezahlt.
+  await recordApiUsage({
+    provider: "openai",
+    purpose: "image_generation",
+    sourceProductId: product.id,
+    variantIndex,
+    model: OPENAI_IMAGE_MODEL,
+    usage: response.usage,
+    costUsd: estimateOpenAiImageCost(OPENAI_IMAGE_MODEL, response.usage),
   });
 
   const b64 = response.data?.[0]?.b64_json;

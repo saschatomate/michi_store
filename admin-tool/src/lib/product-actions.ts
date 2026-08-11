@@ -69,6 +69,7 @@ export async function sendSelectedToPipeline(ids: number[]): Promise<{ sent: num
 
   revalidatePath("/");
   revalidatePath("/mapping");
+  revalidatePath("/", "layout");
   return { sent: rows.length };
 }
 
@@ -103,6 +104,7 @@ export async function regenerateProductContent(id: number): Promise<void> {
   revalidatePath(`/products/${id}`);
   revalidatePath("/");
   revalidatePath("/mapping");
+  revalidatePath("/", "layout");
 }
 
 export async function approveProductContent(id: number): Promise<void> {

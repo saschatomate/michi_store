@@ -14,6 +14,7 @@ import { cardClass } from "@/lib/ui";
 import { diamondSlots, coloredStoneSlots } from "@/lib/product-facts";
 import { defaultImageBasePrompt, resolveModel } from "@/lib/image-generation";
 import { MARINELL_MODELS, type ModelKey } from "@/lib/image-facts";
+import { getLatestCostsForProduct } from "@/lib/cost-tracking";
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (value === null || value === undefined || value === "") return null;
@@ -50,9 +51,12 @@ export default async function ProductDetailPage({
   });
   if (!product) notFound();
 
-  const generatedImages = await db.query.productGeneratedImages.findMany({
-    where: eq(productGeneratedImages.sourceProductId, product.id),
-  });
+  const [generatedImages, generationCosts] = await Promise.all([
+    db.query.productGeneratedImages.findMany({
+      where: eq(productGeneratedImages.sourceProductId, product.id),
+    }),
+    getLatestCostsForProduct(product.id),
+  ]);
 
   const raw = product.rawJson ?? {};
   const diamonds = diamondSlots(raw);
@@ -231,6 +235,7 @@ export default async function ProductDetailPage({
         approvedAt={product.contentApprovedAt}
         generatedAt={product.contentGeneratedAt}
         generationError={product.contentGenerationError}
+        lastGenerationCostUsd={generationCosts.contentGenerationCostUsd}
         content={{
           productName: product.genProductNameDe ?? "",
           shortDescDe: product.genShortDescDe ?? "",
@@ -244,7 +249,10 @@ export default async function ProductDetailPage({
 
       <GeneratedImagesSection
         id={product.id}
-        images={generatedImages}
+        images={generatedImages.map((img) => ({
+          ...img,
+          costUsd: generationCosts.imageCostByVariant.get(img.variantIndex) ?? null,
+        }))}
         defaultPrompt={defaultImageBasePrompt(product)}
         promptOverride={product.imagePromptOverride}
         models={Object.values(MARINELL_MODELS)}

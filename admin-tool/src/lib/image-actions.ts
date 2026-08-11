@@ -43,7 +43,7 @@ async function generateAndSaveVariant(
   const label = `${model.name} – ${poseVariant.label}`;
 
   try {
-    const { buffer, prompt } = await generateProductImageVariant(product, model, poseVariant);
+    const { buffer, prompt } = await generateProductImageVariant(product, model, poseVariant, variantIndex);
     const signed = await signGeneratedImage(buffer, prompt);
     const path = `generated/${product.id}/${variantIndex}-${Date.now()}.png`;
     const { url } = await uploadGeneratedImage(signed, path);
@@ -120,6 +120,9 @@ export async function generateProductImages(id: number, modelKey: MarinellModel[
   await runAllVariants(product, MARINELL_MODELS[modelKey]);
 
   revalidatePath(`/products/${id}`);
+  // "layout" zusätzlich, damit das Budget-Widget in der Sidebar die eben entstandenen Kosten
+  // sofort zeigt, nicht erst nach einem harten Reload.
+  revalidatePath("/", "layout");
 }
 
 // Speichert einen manuellen Prompt-Override (z.B. Korrektur für Innen-/Außenseite bei Armbändern)
@@ -142,6 +145,7 @@ export async function updateImagePromptOverride(id: number, prompt: string): Pro
   await runAllVariants(product, model);
 
   revalidatePath(`/products/${id}`);
+  revalidatePath("/", "layout");
 }
 
 export async function approveProductImage(imageId: number): Promise<void> {
@@ -213,4 +217,5 @@ export async function regenerateProductImageVariant(imageId: number): Promise<vo
   await generateAndSaveVariant(product, model, poseVariant, row.variantIndex);
 
   revalidatePath(`/products/${row.sourceProductId}`);
+  revalidatePath("/", "layout");
 }

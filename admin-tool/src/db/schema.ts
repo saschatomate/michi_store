@@ -165,6 +165,51 @@ export const productGeneratedImages = pgTable(
   (table) => [index("product_generated_images_product_idx").on(table.sourceProductId)],
 );
 
+export const API_USAGE_PROVIDER_VALUES = ["anthropic", "openai"] as const;
+export type ApiUsageProvider = (typeof API_USAGE_PROVIDER_VALUES)[number];
+
+export const API_USAGE_PURPOSE_VALUES = ["text_generation", "image_generation"] as const;
+export type ApiUsagePurpose = (typeof API_USAGE_PURPOSE_VALUES)[number];
+
+// Kosten-Tracking für die Budget-Anzeige im Admin: ein Eintrag pro tatsächlichem API-Aufruf an
+// Claude (Textgenerierung, text-generation.ts) oder OpenAI (Bildgenerierung, image-generation.ts),
+// berechnet aus der von der jeweiligen API zurückgegebenen echten Token-Nutzung (nicht geschätzt,
+// siehe lib/cost-tracking.ts). Bewusst append-only: wird nie verändert oder gelöscht, auch wenn
+// eine Bildvariante später neu generiert wird - das Geld für den vorherigen Aufruf wurde bereits
+// ausgegeben und muss im Gesamtverbrauch bleiben.
+export const apiUsageEvents = pgTable(
+  "api_usage_events",
+  {
+    id: serial("id").primaryKey(),
+    provider: text("provider").$type<ApiUsageProvider>().notNull(),
+    purpose: text("purpose").$type<ApiUsagePurpose>().notNull(),
+    sourceProductId: integer("source_product_id").references(() => sourceProducts.id),
+    // Bei Bildgenerierung: welche der 3 Varianten (0-2, siehe POSE_VARIANTS) diesen Aufruf
+    // ausgelöst hat - erlaubt es, die zuletzt für einen Slot gezahlten Kosten anzuzeigen.
+    variantIndex: integer("variant_index"),
+    model: text("model").notNull(),
+    // Rohe Usage-Antwort der jeweiligen API - Audit-Trail und Basis für eine Neuberechnung, falls
+    // sich die Preistabelle in cost-tracking.ts später ändert.
+    usage: jsonb("usage").$type<Record<string, unknown>>(),
+    costUsd: doublePrecision("cost_usd").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("api_usage_events_source_product_idx").on(table.sourceProductId),
+    index("api_usage_events_created_at_idx").on(table.createdAt),
+  ],
+);
+
+// Einzige Einstellung bisher: das insgesamt verfügbare Budget (USD) für Claude- und
+// OpenAI-Aufrufe, manuell in der Admin-Oberfläche gepflegt (weder Anthropic noch OpenAI bieten für
+// normale API-Keys einen Guthaben-Abfrage-Endpoint). Immer genau eine Zeile mit id=1 (Singleton,
+// siehe budget-actions.ts).
+export const budgetSettings = pgTable("budget_settings", {
+  id: serial("id").primaryKey(),
+  totalBudgetUsd: doublePrecision("total_budget_usd").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const importRuns = pgTable("import_runs", {
   id: serial("id").primaryKey(),
   filename: text("filename").notNull(),

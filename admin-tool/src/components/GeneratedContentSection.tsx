@@ -9,7 +9,7 @@ import {
   updateProductContent,
 } from "@/lib/product-actions";
 import { buttonPrimary, buttonSecondary, buttonGhost, cardClass, inputClass } from "@/lib/ui";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatUsd } from "@/lib/format";
 import type { ProductStatus } from "@/db/schema";
 import type { GeneratedContent } from "@/lib/text-generation";
 
@@ -58,6 +58,7 @@ export function GeneratedContentSection({
   approvedAt,
   generatedAt,
   generationError,
+  lastGenerationCostUsd,
   content,
 }: {
   id: number;
@@ -66,6 +67,7 @@ export function GeneratedContentSection({
   approvedAt: Date | null;
   generatedAt: Date | null;
   generationError: string | null;
+  lastGenerationCostUsd: number | null;
   content: GeneratedContent;
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -161,6 +163,12 @@ export function GeneratedContentSection({
         <p className="mb-3 flex items-center gap-1.5 text-xs font-medium text-emerald-700">
           <CheckCircle2 size={13} />
           Freigegeben am {formatDateTime(approvedAt)}
+        </p>
+      )}
+
+      {!isEditing && generatedAt && lastGenerationCostUsd !== null && (
+        <p className="mb-3 text-xs text-zinc-400">
+          Letzte Generierung: ca. {formatUsd(lastGenerationCostUsd)}
         </p>
       )}
 

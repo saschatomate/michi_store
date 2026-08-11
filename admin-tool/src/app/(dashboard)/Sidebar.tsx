@@ -6,7 +6,9 @@ import { usePathname } from "next/navigation";
 import { Gem, Upload, Link2, LogOut } from "lucide-react";
 import { logout } from "@/lib/auth-actions";
 import { FilterPanel } from "@/components/FilterPanel";
+import { BudgetWidget } from "@/components/BudgetWidget";
 import type { FilterOptions } from "@/lib/filter-options";
+import type { BudgetSummary } from "@/lib/cost-tracking";
 
 const NAV_ITEMS = [
   { href: "/", label: "Produkte", icon: Gem },
@@ -14,7 +16,13 @@ const NAV_ITEMS = [
   { href: "/mapping", label: "Mapping", icon: Link2 },
 ];
 
-export function Sidebar({ filterOptions }: { filterOptions: FilterOptions }) {
+export function Sidebar({
+  filterOptions,
+  budget,
+}: {
+  filterOptions: FilterOptions;
+  budget: BudgetSummary;
+}) {
   const pathname = usePathname();
 
   return (
@@ -48,6 +56,10 @@ export function Sidebar({ filterOptions }: { filterOptions: FilterOptions }) {
           );
         })}
       </nav>
+
+      <div className="shrink-0 border-t border-zinc-200/80 p-3">
+        <BudgetWidget budget={budget} />
+      </div>
 
       <div className="shrink-0 border-t border-zinc-200/80 p-3">
         <form action={logout}>

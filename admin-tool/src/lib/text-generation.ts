@@ -2,6 +2,9 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { sourceProducts } from "@/db/schema";
 import { diamondSlots, coloredStoneSlots } from "@/lib/product-facts";
+import { estimateClaudeTextCost, recordApiUsage } from "@/lib/cost-tracking";
+
+const CLAUDE_MODEL = "claude-opus-4-8";
 
 type SourceProductRow = typeof sourceProducts.$inferSelect;
 
@@ -115,7 +118,7 @@ export async function generateProductContent(product: SourceProductRow): Promise
   const facts = buildProductFacts(product);
 
   const response = await client.messages.create({
-    model: "claude-opus-4-8",
+    model: CLAUDE_MODEL,
     max_tokens: 2048,
     thinking: { type: "adaptive" },
     output_config: {
@@ -129,6 +132,17 @@ export async function generateProductContent(product: SourceProductRow): Promise
         content: `Erzeuge die Produkttexte für dieses Schmuckstück (JSON-Fakten):\n\n${JSON.stringify(facts, null, 2)}`,
       },
     ],
+  });
+
+  // Kosten werden verbucht, sobald die Antwort da ist - unabhängig davon, ob sie danach als
+  // Refusal oder ungültiges JSON verworfen wird. Das Geld für den Aufruf ist in jedem Fall weg.
+  await recordApiUsage({
+    provider: "anthropic",
+    purpose: "text_generation",
+    sourceProductId: product.id,
+    model: CLAUDE_MODEL,
+    usage: response.usage,
+    costUsd: estimateClaudeTextCost(CLAUDE_MODEL, response.usage),
   });
 
   if (response.stop_reason === "refusal") {
