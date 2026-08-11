@@ -27,8 +27,15 @@ export function diamondSlots(raw: Record<string, string>): DiamondSlot[] {
       art,
       anzahl: raw[`Diamant${i}_Anzahl`]?.trim(),
       carat: raw[`Diamant${i}_Carat`]?.trim(),
-      farbe: raw[`Diamant${i}_Farbe`]?.trim(),
-      reinheit: raw[`Diamant${i}_Reinheit`]?.trim(),
+      // Diamant{i}_Farbe/Diamant{i}_Reinheit sind in den Rohdaten des Lieferanten vertauscht -
+      // geprüft an echten Katalogdaten: Diamant{i}_Farbe enthält Reinheitsgrade ("si", "vsi",
+      // "pi", "vvs", "if", ...), Diamant{i}_Reinheit enthält Farbgrade ("TW", "W", "F", "D", "E",
+      // "braun", "gelb", "schwarz", "fancy", ...) - identisch zum Wertebereich der (korrekt
+      // benannten) Übersichtsfelder sourceProducts.diamantFarbe/diamantReinheit. Deshalb hier
+      // bewusst über Kreuz gelesen, damit farbe/reinheit tatsächlich das enthalten, was ihr Name
+      // verspricht.
+      farbe: raw[`Diamant${i}_Reinheit`]?.trim(),
+      reinheit: raw[`Diamant${i}_Farbe`]?.trim(),
       schliff: raw[`Diamant${i}_Schliff`]?.trim(),
     });
   }

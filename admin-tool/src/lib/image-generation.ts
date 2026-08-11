@@ -3,6 +3,7 @@ import OpenAI, { toFile } from "openai";
 import type { sourceProducts } from "@/db/schema";
 import { bodyPartMapping, assignModel, MARINELL_MODELS, type MarinellModel, type PoseVariant } from "@/lib/image-facts";
 import { estimateOpenAiImageCost, recordApiUsage } from "@/lib/cost-tracking";
+import { diamondSlots, coloredStoneSlots } from "@/lib/product-facts";
 
 type SourceProductRow = typeof sourceProducts.$inferSelect;
 
@@ -86,6 +87,113 @@ export function defaultImageBasePrompt(product: SourceProductRow): string {
   );
 }
 
+function uniqueNonEmpty(values: (string | undefined)[]): string[] {
+  return [...new Set(values.filter((v): v is string => Boolean(v?.trim())))];
+}
+
+// Diamant-Farbgrade sind fast immer Fachcodes der klassischen Skala (D-Z, oder die ältere
+// Wesselton-Nomenklatur "TW"/"W"/"F" etc.) - für ein Bildmodell bedeutungslos und würden nur
+// verwirren, wenn man sie roh in den Prompt schreibt. Nur echte Fancy-Color-Diamanten (braun,
+// gelb, schwarz, ...) sind visuell relevant und werden hier erkannt; alles andere gilt als
+// Standard-weißer/farbloser Diamant und wird im Prompt gar nicht erst erwähnt.
+const FANCY_DIAMOND_COLOR_WORDS: Record<string, string> = {
+  braun: "brauner Diamant",
+  gelb: "gelber Diamant",
+  schwarz: "schwarzer Diamant",
+  pink: "pinker Diamant",
+  grün: "grüner Diamant",
+  orange: "oranger Diamant",
+  blau: "blauer Diamant",
+  rot: "roter Diamant",
+  grau: "grauer Diamant",
+  rosa: "rosa Diamant",
+  champagner: "champagnerfarbener Diamant",
+  cognac: "cognacfarbener Diamant",
+};
+
+function describeDiamondColor(value: string | undefined): string | null {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return null;
+  if (FANCY_DIAMOND_COLOR_WORDS[normalized]) return FANCY_DIAMOND_COLOR_WORDS[normalized];
+  if (normalized === "fancy") return "farbiger Fancy-Color-Diamant";
+  return null;
+}
+
+// Holt die echten Produktdaten (Material/Legierung, Diamant-/Farbstein-Details, Maße) und baut
+// daraus einen Fakten-Block für den Bild-Prompt - der Bildgenerator soll Größe, Proportionen und
+// Farben NICHT nur aus dem (ggf. unterschiedlich beleuchteten/komprimierten) Referenzfoto ableiten,
+// sondern anhand der tatsächlichen Katalogdaten. Wichtig v.a. für die Metallfarbe: SYSTEM_INSTRUCTIONS
+// schreibt bewusst ein warmes "Golden Hour"-Licht für alle Bilder vor, das Weißgold/Silber/Platin
+// ohne diesen Hinweis leicht gelblich statt hell/kühl-silbrig einfärben würde. Wie
+// stylePromptAddition bewusst NICHT Teil von defaultImageBasePrompt (dem editierbaren Prompt in der
+// UI) - Produktdaten sind kein Wortlaut, den ein manueller Override versehentlich verlieren darf;
+// falls ein Fakt falsch ist, ist die Korrektur die Produktdatenpflege, nicht der Prompt.
+export function productFactsPromptAddition(product: SourceProductRow): string {
+  const raw = product.rawJson ?? {};
+  const facts: string[] = [];
+
+  // hauptmaterial trägt die für die Bildfarbe entscheidende Angabe (z.B. "Weißgold"/"Gelbgold"/
+  // "Platin"), legierung meist nur den Feingehalt ("18kt") - beide kombinieren, sonst geht die
+  // Farbe unter, wenn legierung allein bevorzugt würde.
+  const material = [product.hauptmaterial, product.legierung].filter(Boolean).join(", ");
+  if (material) facts.push(`Material: ${material}`);
+
+  const diamondSlotRows = diamondSlots(raw);
+  const diamondCuts = uniqueNonEmpty(diamondSlotRows.map((s) => s.schliff));
+  // Fancy-Farben aus den Einzelstein-Slots UND dem Übersichtsfeld sammeln - manche Produkte haben
+  // nur eines der beiden gepflegt.
+  const diamondColors = uniqueNonEmpty(
+    [...diamondSlotRows.map((s) => s.farbe), product.diamantFarbe ?? undefined].map(
+      (v) => describeDiamondColor(v) ?? undefined,
+    ),
+  );
+  if (product.caratur || product.anzahlSteine || diamondCuts.length > 0 || diamondColors.length > 0) {
+    const parts = [
+      product.caratur ? `${product.caratur} Karat gesamt` : null,
+      product.anzahlSteine ? `${product.anzahlSteine} Stein(e)` : null,
+      diamondCuts.length > 0 ? `Schliffform ${diamondCuts.join("/")}` : null,
+      diamondColors.length > 0 ? diamondColors.join("/") : null,
+    ].filter((p): p is string => Boolean(p));
+    if (parts.length > 0) facts.push(`Diamant(en): ${parts.join(", ")}`);
+  }
+
+  const coloredStones = coloredStoneSlots(raw)
+    .map((s) => {
+      const detail = [s.farbe, s.schliff, s.carat ? `${s.carat} Karat` : null]
+        .filter((p): p is string => Boolean(p))
+        .join(", ");
+      return detail ? `${s.art} (${detail})` : s.art;
+    })
+    .filter(Boolean);
+  if (coloredStones.length > 0) facts.push(`Farbstein(e): ${coloredStones.join("; ")}`);
+
+  const dimensionParts = [
+    product.ringgroesse ? `Ringgröße ${product.ringgroesse}` : null,
+    product.hoehe ? `Höhe ${product.hoehe}mm` : null,
+    product.breite ? `Breite ${product.breite}mm` : null,
+    product.durchmesser ? `Durchmesser ${product.durchmesser}mm` : null,
+    product.staerke ? `Stärke ${product.staerke}mm` : null,
+    product.produktLaengeCm ? `Länge ${product.produktLaengeCm}cm` : null,
+  ].filter((p): p is string => Boolean(p));
+  if (dimensionParts.length > 0) facts.push(`Maße: ${dimensionParts.join(", ")}`);
+
+  if (facts.length === 0) return "";
+
+  return (
+    ` Echte Fakten zu diesem Schmuckstück aus den Produktdaten (gelten zusätzlich zum Referenzbild, ` +
+    `nicht nur optisch aus ihm ableiten): ${facts.join(". ")}. Diese Fakten bestimmen Farbe und ` +
+    `Proportionen im generierten Bild: Trotz der warmen Bildstimmung bleibt die echte Metallfarbe ` +
+    `erkennbar - Weißgold/Silber/Platin bleibt hell und kühl-silbrig, wird NICHT gelblich ` +
+    `dargestellt; Gelbgold bleibt warm-golden; Roségold bleibt zart roséfarben. Farbsteine zeigen ` +
+    `exakt die angegebene Steinfarbe. Falls oben ein farbiger Diamant (z.B. brauner, gelber oder ` +
+    `schwarzer Diamant) genannt ist, zeigt der Diamant exakt diese Farbe statt eines Standard-` +
+    `weißen/farblosen Diamanten - ist dort KEINE Diamantfarbe genannt, bleibt der Diamant weiß/farblos. ` +
+    `Die Größe des Schmuckstücks im Bild muss zu den angegebenen Maßen passen (z.B. wirkt ein sehr ` +
+    `schmales/kleines Maß entsprechend zierlich neben Hand, Hals oder Handgelenk, ein großes Maß ` +
+    `entsprechend prägnant).`
+  );
+}
+
 export async function generateProductImageVariant(
   product: SourceProductRow,
   model: MarinellModel,
@@ -133,9 +241,11 @@ export async function generateProductImageVariant(
     `NIEMALS das dort abgebildete Schmuckstück, dessen Design, Form oder Fassung - das im ` +
     `generierten Bild sichtbare Schmuckstück muss zu 100% aus dem ERSTEN Bild stammen.`;
 
+  const factsAddition = productFactsPromptAddition(product);
+
   const prompt =
-    `${basePrompt}${stylePromptAddition} Zeige ${poseVariant.promptDescriptor}. Hohe Auflösung, ` +
-    `scharfer Fokus auf das Schmuckstück.`;
+    `${basePrompt}${factsAddition}${stylePromptAddition} Zeige ${poseVariant.promptDescriptor}. ` +
+    `Hohe Auflösung, scharfer Fokus auf das Schmuckstück.`;
 
   // gpt-image-Modelle haben ein niedriges Per-Minute-Rate-Limit für Edit-Aufrufe; bei 3 parallelen
   // Varianten pro Produkt reicht das SDK-Default (2 Retries) oft nicht aus, um einen 429 mit
