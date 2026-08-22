@@ -5,6 +5,7 @@ import {
   bodyPartMapping,
   assignModel,
   MARINELL_MODELS,
+  type BodyPartMapping,
   type MarinellModel,
   type ModelGender,
   type PoseVariant,
@@ -218,7 +219,16 @@ function motifSizeMm(product: SourceProductRow): number | null {
 // stylePromptAddition bewusst NICHT Teil von defaultImageBasePrompt (dem editierbaren Prompt in der
 // UI) - Produktdaten sind kein Wortlaut, den ein manueller Override versehentlich verlieren darf;
 // falls ein Fakt falsch ist, ist die Korrektur die Produktdatenpflege, nicht der Prompt.
-export function productFactsPromptAddition(product: SourceProductRow): string {
+//
+// mapping ist optional (Aufrufer ohne Kategorie-Zuordnung, z.B. eine zukünftige Vorschau ohne
+// Produkt, können ihn weglassen) - wird er mitgegeben, ergänzt die Funktion zusätzlich zum
+// mm-Alltagsobjekt-Vergleich einen "darf höchstens X% der Bildbreite einnehmen"-Wert
+// (BodyPartMapping.estimatedFrameWidthMm). Grund: bei einem realen Test (Produkt 4R267R8, 11mm-
+// Collier-Cluster) hat der reine mm/Alltagsobjekt-Vergleich allein gpt-image-1.5 NICHT sichtbar
+// dazu gebracht, das Stück kleiner zu rendern - ein Flächenanteil im Bild selbst ist eine
+// direktere Stellschraube als ein Wert, den das Modell erst über reale Anatomie in Bildmaßstab
+// übersetzen müsste.
+export function productFactsPromptAddition(product: SourceProductRow, mapping?: BodyPartMapping): string {
   const raw = product.rawJson ?? {};
   const facts: string[] = [];
 
@@ -276,6 +286,14 @@ export function productFactsPromptAddition(product: SourceProductRow): string {
       `den Maßstab im Bild, NICHT an der (typischerweise bildfüllenden) Größe im freigestellten ` +
       `Referenzfoto.`
     : "";
+  const maxWidthPercent =
+    motifMm && mapping ? Math.max(1, Math.round((motifMm / mapping.estimatedFrameWidthMm) * 100)) : null;
+  const frameWidthClause = maxWidthPercent
+    ? ` KRITISCH als harte Obergrenze: Das gesamte Schmuckstück (alle Steine/Elemente zusammen) ` +
+      `darf im fertigen Bild NICHT breiter als ca. ${maxWidthPercent}% der sichtbaren Bildbreite ` +
+      `sein - miss das notfalls gedanklich gegen die Bildbreite ab, bevor du die finale Größe ` +
+      `festlegst, statt dich an der Größe im freigestellten Referenzfoto zu orientieren.`
+    : "";
 
   return (
     ` Echte Fakten zu diesem Schmuckstück aus den Produktdaten (gelten zusätzlich zum Referenzbild, ` +
@@ -291,7 +309,7 @@ export function productFactsPromptAddition(product: SourceProductRow): string {
     `entsprechend dieser Maße, NICHT nach freiem Ermessen oder zur besseren Bildwirkung. Ein sehr ` +
     `schmales/kleines Maß muss entsprechend zierlich und unauffällig neben Hand, Ohr, Hals oder ` +
     `Handgelenk wirken, ein großes Maß entsprechend prägnant und größer - vermeide sowohl ein ` +
-    `unrealistisch übergroßes als auch ein zu kleines Schmuckstück.${sizeAnchor}`
+    `unrealistisch übergroßes als auch ein zu kleines Schmuckstück.${sizeAnchor}${frameWidthClause}`
   );
 }
 
@@ -345,7 +363,7 @@ export async function generateProductImageVariant(
     `das EINZIGE Schmuckstück im gesamten generierten Bild - das Model trägt sonst keinerlei ` +
     `Schmuck, unabhängig davon, was auf dem zweiten Referenzfoto zu sehen ist.`;
 
-  const factsAddition = productFactsPromptAddition(product);
+  const factsAddition = productFactsPromptAddition(product, mapping);
 
   const prompt =
     `${basePrompt}${factsAddition}${stylePromptAddition} Zeige ${poseVariant.promptDescriptor}. ` +

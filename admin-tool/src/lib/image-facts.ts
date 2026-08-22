@@ -4,6 +4,15 @@ export type BodyPartMapping = {
   bodyPart: string;
   compositionHint: string;
   size: ImageSize;
+  // Grobe Schätzung, wie viel echte Körperbreite (mm) bei dieser Nahaufnahme-Rahmung ungefähr im
+  // Bild zu sehen ist (z.B. Kinn-bis-Schulter-Bereich bei Colliers). Dient NUR dazu, in
+  // image-generation.ts einen "Schmuckstück darf höchstens X% der Bildbreite einnehmen"-Wert
+  // auszurechnen - ein Flächenanteil ist für ein Bildmodell eine direktere, verlässlichere
+  // Stellschraube als eine abstrakte mm-Angabe, die es erst gedanklich in Bildmaßstab übersetzen
+  // müsste. Bewusst grob geschätzt und über die Kategorien hinweg konsistent gehalten - kein
+  // exaktes Messwert, sondern ein Anhaltspunkt zum Nachjustieren, falls Größen weiterhin nicht
+  // passen.
+  estimatedFrameWidthMm: number;
 };
 
 // Kategorie-Verteilung im Katalog (Stand Import): Ring 3869, Ohrschmuck 2311, Colliers 1440,
@@ -21,6 +30,7 @@ const BODY_PART_BY_HAUPTKATEGORIE: Record<string, BodyPartMapping> = {
       "Ringfinger, auf dem der Ring sitzt, ist deutlich von den Nachbarfingern abgesetzt sichtbar. " +
       "Ring scharf im Fokus, restliche Hand und Umgebung durch Schärfentiefe leicht weich",
     size: "1024x1536",
+    estimatedFrameWidthMm: 220,
   },
   Ohrschmuck: {
     bodyPart: "ein Ohr",
@@ -31,6 +41,7 @@ const BODY_PART_BY_HAUPTKATEGORIE: Record<string, BodyPartMapping> = {
       "sodass der Ohrschmuck frei sichtbar ist, dabei aber weiterhin deutlich Haare im Bild (z.B. " +
       "am Hinterkopf/seitlich). Schmuckstück scharf im Fokus, Haare und Hintergrund weich unscharf",
     size: "1024x1536",
+    estimatedFrameWidthMm: 170,
   },
   // "Dekolleté" bewusst auf "Schlüsselbein/oberer Halsansatz" präzisiert und eine explizite
   // Bedeckungs-Klausel ergänzt - die Kombination aus (nahezu) faceless Crop + Dekolleté-Betonung
@@ -47,6 +58,7 @@ const BODY_PART_BY_HAUPTKATEGORIE: Record<string, BodyPartMapping> = {
       "Kragen oder Ausschnitt der Kleidung am unteren Bildrand sichtbar und Teil der Komposition. " +
       "Schmuckstück auf der Haut liegend scharf im Fokus, alles andere leicht weich",
     size: "1024x1536",
+    estimatedFrameWidthMm: 180,
   },
   Anhänger: {
     bodyPart: "Hals und Schlüsselbein",
@@ -60,6 +72,7 @@ const BODY_PART_BY_HAUPTKATEGORIE: Record<string, BodyPartMapping> = {
       "Kragen oder Ausschnitt der Kleidung am unteren Bildrand sichtbar und Teil der Komposition. " +
       "Anhänger an einer Kette auf der Haut liegend scharf im Fokus, alles andere leicht weich",
     size: "1024x1536",
+    estimatedFrameWidthMm: 180,
   },
   Armbänder: {
     bodyPart: "ein Handgelenk",
@@ -74,6 +87,7 @@ const BODY_PART_BY_HAUPTKATEGORIE: Record<string, BodyPartMapping> = {
       "die im Referenzbild sichtbare Anordnung der Elemente exakt bei, anstatt sie zu erraten oder " +
       "zu vertauschen",
     size: "1024x1536",
+    estimatedFrameWidthMm: 170,
   },
   Armreifen: {
     bodyPart: "ein Handgelenk",
@@ -88,6 +102,7 @@ const BODY_PART_BY_HAUPTKATEGORIE: Record<string, BodyPartMapping> = {
       "die im Referenzbild sichtbare Anordnung der Elemente exakt bei, anstatt sie zu erraten oder " +
       "zu vertauschen",
     size: "1024x1536",
+    estimatedFrameWidthMm: 170,
   },
   Manschettenknöpfe: {
     bodyPart: "eine Hemdmanschette am Handgelenk",
@@ -95,6 +110,7 @@ const BODY_PART_BY_HAUPTKATEGORIE: Record<string, BodyPartMapping> = {
       "Extreme Nahaufnahme eines Handgelenks mit Hemdmanschette, Manschettenknopf geschlossen und " +
       "scharf im Fokus, schlichter Hemdärmel, Hintergrund durch Schärfentiefe weich",
     size: "1024x1536",
+    estimatedFrameWidthMm: 90,
   },
 };
 
