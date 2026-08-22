@@ -21,28 +21,46 @@ const OPENAI_IMAGE_MODEL = "gpt-image-1.5";
 // vom Model zeigt als ein reines Produkt-Makrofoto - keine isolierte Hand/Ohr/Hals-Nahaufnahme vor
 // leerem Hintergrund.
 const SYSTEM_INSTRUCTIONS_BEFORE_CLOTHING =
+  // Explizites Kontext-/Zweck-Framing an erster Stelle: hilft OpenAIs Sicherheitssystem (Prompt- +
+  // Bild-Moderation vor jeder gpt-image-Generierung), den nahen Bildausschnitt korrekt als seriöse
+  // Produktfotografie statt als sinnliche/erotische Aufnahme einzuordnen. Wurde ergänzt, nachdem ein
+  // echter Aufruf mit safety_violations=[sexual] abgelehnt wurde.
+  "Kontext: Dies ist professionelle E-Commerce-/Katalog-Produktfotografie für eine seriöse " +
+  "Fine-Jewellery-Marke, ausschließlich zur Präsentation eines einzelnen Schmuckstücks am Körper " +
+  "(vergleichbar mit Tiffany & Co., Cartier oder Van Cleef & Arpels Kampagnenbildern). KEINE " +
+  "erotische, sexualisierte, anzügliche oder freizügige Darstellung - das Model ist vollständig " +
+  "und dezent bekleidet, Pose und Ausdruck sind neutral-elegant wie in einem Modemagazin- oder " +
+  "Werbekatalog-Shooting, nicht intim oder suggestiv. " +
   "MARINELL Editorial-Luxus-Schmuckfotografie: 'Luxury, lived discreetly' - die Bildsprache ist " +
   "leise, ruhig, nie laut oder aufdringlich. Sie transportiert Ruhe, Eleganz, Wärme, Vertrauen und " +
   "Zeitlosigkeit - NICHT Status, Reichtum oder Dekadenz. Großzügiger, eleganter Bildausschnitt, " +
   "der deutlich mehr vom Model zeigt als eine isolierte Nahaufnahme nur des Schmuckstücks - je " +
-  "nach Schmuckart z.B. Teile von Kinn/Mund, Hals, Schulter, Dekolleté oder Oberkörper mit im " +
-  "Bild. Das Schmuckstück bleibt scharf im Fokus, alles andere (Haare, Hintergrund, entferntere " +
-  "Hautpartien) durch geringe Schärfentiefe (Bokeh) leicht unscharf. Hintergrund: champagnerfarbener " +
+  "nach Schmuckart z.B. Teile von Kinn/Mund, Hals, Schulter oder Oberkörper mit im Bild, dabei " +
+  "immer vollständig und nicht freizügig bekleidet. Das Schmuckstück bleibt scharf im Fokus, alles " +
+  "andere (Haare, Hintergrund, entferntere Hautpartien) durch geringe Schärfentiefe (Bokeh) leicht " +
+  "unscharf. Hintergrund: champagnerfarbener " +
   "Seiden-/Satinvorhang mit weichen Falten, oder alternativ ein warmer, heller Sandton-Studiohintergrund " +
   "ohne sichtbare Struktur oder Requisiten - Farbwelt durchgehend Ivory, Champagne, Warm Sand, " +
   "Cashmere, Black, Warm Gold, Soft Taupe. Licht: warmes 'Golden Hour'/Champagnerlicht - großes, " +
   "weiches Beauty-Light von links oben, warme Farbtemperatur, feines Kantenlicht, sanfte Schatten, " +
-  "keine harten Reflexe. Kein vollständiges Gesicht im Bild (Augen bleiben außerhalb des " +
-  "Bildausschnitts), ruhige, unaufdringliche Ausstrahlung. ";
+  "keine harten Reflexe. Der Fokus liegt auf dem Schmuckstück statt auf einem vollständigen " +
+  "Beauty-Porträt - das Gesicht muss nicht komplett im Bild sein (z.B. nur Kinn/Wange sichtbar), " +
+  "wirkt dabei aber immer natürlich und beiläufig, NICHT bewusst anonymisiert oder abgeschnitten " +
+  "wirkend. Ruhige, unaufdringliche, professionelle Ausstrahlung. ";
 
 // Kleidung ist bewusst NICHT Teil von SYSTEM_INSTRUCTIONS, sondern hängt vom Geschlecht des
 // zugewiesenen Models ab (seit Einführung der männlichen Gegenstücke Adrian/Luca/Kenji/Malik) -
 // ein Kleid wäre bei einem männlichen Model falsch. Beide Varianten bleiben in derselben
 // Farbwelt/Materialität wie der Rest der Bildsprache (Seide, Kaschmir, Schwarz, Champagner).
+// "Slip-Kleid" wurde bewusst zu "Abendkleid mit schmalen Trägern" geändert - das Wort "Slip" kann
+// von einer Bild-/Text-Moderation (auch bei englischsprachiger Auswertung eines deutschen Prompts)
+// als Dessous/Nachtwäsche statt als Kleidungsstil gelesen werden.
 const CLOTHING_BY_GENDER: Record<ModelGender, string> = {
   weiblich:
-    "Kleidung: schwarzes Seiden-Slip-Kleid, champagnerfarbenes Satinkleid oder cremefarbener " +
-    "Kaschmir/Blazer - schlicht, ohne Muster oder Logos, die nicht vom Schmuckstück ablenken. ",
+    "Kleidung: schwarzes seidenes Abendkleid mit schmalen Trägern, champagnerfarbenes Satinkleid " +
+    "oder cremefarbener Kaschmir/Blazer - schlicht, ohne Muster oder Logos, die nicht vom " +
+    "Schmuckstück ablenken. Kleidung sitzt immer vollständig bedeckend, nicht durchsichtig und " +
+    "nicht freizügig. ",
   männlich:
     "Kleidung: cremefarbener Kaschmir-/Rollkragenpullover, offenes weißes oder schwarzes " +
     "Leinenhemd oder schlicht geschnittener schwarzer Blazer - schlicht, ohne Muster oder Logos, " +

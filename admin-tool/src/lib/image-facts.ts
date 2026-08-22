@@ -32,25 +32,32 @@ const BODY_PART_BY_HAUPTKATEGORIE: Record<string, BodyPartMapping> = {
       "am Hinterkopf/seitlich). Schmuckstück scharf im Fokus, Haare und Hintergrund weich unscharf",
     size: "1024x1536",
   },
+  // "Dekolleté" bewusst auf "Schlüsselbein/oberer Halsansatz" präzisiert und eine explizite
+  // Bedeckungs-Klausel ergänzt - die Kombination aus (nahezu) faceless Crop + Dekolleté-Betonung
+  // wurde von OpenAIs Sicherheitssystem einmal als safety_violations=[sexual] abgelehnt.
   Colliers: {
-    bodyPart: "Hals und Dekolleté",
+    bodyPart: "Hals und Schlüsselbein",
     compositionHint:
       "Beauty-Nahaufnahme mit großzügigerem Ausschnitt, elegant statt extrem eng zugeschnitten: " +
-      "unterer Gesichtsbereich (Nase/Mund/Kinn, am oberen Bildrand angeschnitten - KEIN vollständiges " +
-      "Gesicht), dazu deutlich sichtbare Haare an der Seite des Kopfes, Hals und oberes Dekolleté. " +
-      "Kamera nahezu frontal mit leichtem Winkel. Kragen oder Ausschnitt der Kleidung am unteren " +
-      "Bildrand sichtbar und Teil der Komposition. " +
+      "unterer Gesichtsbereich sichtbar (z.B. Nase/Mund/Kinn/Wange, am oberen Bildrand angeschnitten " +
+      "- kein vollständiges Beauty-Porträt nötig, aber auch nicht bewusst faceless/anonymisiert), " +
+      "dazu deutlich sichtbare Haare an der Seite des Kopfes sowie Hals und Schlüsselbein. Kleidung " +
+      "bedeckt die Brust vollständig und nicht freizügig - sichtbar ist ausschließlich Schlüsselbein " +
+      "und oberer Halsansatz, kein tiefer Ausschnitt. Kamera nahezu frontal mit leichtem Winkel. " +
+      "Kragen oder Ausschnitt der Kleidung am unteren Bildrand sichtbar und Teil der Komposition. " +
       "Schmuckstück auf der Haut liegend scharf im Fokus, alles andere leicht weich",
     size: "1024x1536",
   },
   Anhänger: {
-    bodyPart: "Hals und Dekolleté",
+    bodyPart: "Hals und Schlüsselbein",
     compositionHint:
       "Beauty-Nahaufnahme mit großzügigerem Ausschnitt, elegant statt extrem eng zugeschnitten: " +
-      "unterer Gesichtsbereich (Nase/Mund/Kinn, am oberen Bildrand angeschnitten - KEIN vollständiges " +
-      "Gesicht), dazu deutlich sichtbare Haare an der Seite des Kopfes, Hals und oberes Dekolleté. " +
-      "Kamera nahezu frontal mit leichtem Winkel. Kragen oder Ausschnitt der Kleidung am unteren " +
-      "Bildrand sichtbar und Teil der Komposition. " +
+      "unterer Gesichtsbereich sichtbar (z.B. Nase/Mund/Kinn/Wange, am oberen Bildrand angeschnitten " +
+      "- kein vollständiges Beauty-Porträt nötig, aber auch nicht bewusst faceless/anonymisiert), " +
+      "dazu deutlich sichtbare Haare an der Seite des Kopfes sowie Hals und Schlüsselbein. Kleidung " +
+      "bedeckt die Brust vollständig und nicht freizügig - sichtbar ist ausschließlich Schlüsselbein " +
+      "und oberer Halsansatz, kein tiefer Ausschnitt. Kamera nahezu frontal mit leichtem Winkel. " +
+      "Kragen oder Ausschnitt der Kleidung am unteren Bildrand sichtbar und Teil der Komposition. " +
       "Anhänger an einer Kette auf der Haut liegend scharf im Fokus, alles andere leicht weich",
     size: "1024x1536",
   },
