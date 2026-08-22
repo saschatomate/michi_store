@@ -15,7 +15,7 @@ import { buttonPrimary, buttonSecondary, buttonGhost, cardClass, inputClass } fr
 import { Lightbox } from "@/components/Lightbox";
 import { formatUsd } from "@/lib/format";
 import type { GeneratedImageStatus } from "@/db/schema";
-import type { ModelKey } from "@/lib/image-facts";
+import type { ModelGender, ModelKey } from "@/lib/image-facts";
 
 export type GeneratedImageItem = {
   id: number;
@@ -33,6 +33,7 @@ export type GeneratedImageItem = {
 export type ModelOption = {
   key: ModelKey;
   name: string;
+  gender: ModelGender;
   referenceImageUrl: string;
   tagline: string;
 };
@@ -57,6 +58,21 @@ function ModelPickerModal({
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState(currentModelKey ?? recommendedModelKey);
+  // Geschlechts-Reiter (weiblich/männlich) filtert nur, welche 4 der 8 Models als Karten gezeigt
+  // werden - startet auf dem Geschlecht des aktuell verwendeten (oder sonst empfohlenen) Models.
+  const initialModel = models.find((m) => m.key === (currentModelKey ?? recommendedModelKey));
+  const [genderFilter, setGenderFilter] = useState<ModelGender>(initialModel?.gender ?? "weiblich");
+  const visibleModels = models.filter((m) => m.gender === genderFilter);
+
+  function selectGender(gender: ModelGender) {
+    setGenderFilter(gender);
+    const stillVisible = models.some((m) => m.key === selected && m.gender === gender);
+    if (!stillVisible) {
+      const recommended = models.find((m) => m.key === recommendedModelKey && m.gender === gender);
+      const fallback = models.find((m) => m.gender === gender);
+      setSelected((recommended ?? fallback)?.key ?? selected);
+    }
+  }
 
   return (
     <div
@@ -82,8 +98,25 @@ function ModelPickerModal({
           Generierung wiederverwendet.
         </p>
 
+        <div className="mb-4 inline-flex rounded-lg border border-zinc-200 p-0.5">
+          {(["weiblich", "männlich"] as const).map((gender) => (
+            <button
+              key={gender}
+              type="button"
+              onClick={() => selectGender(gender)}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                genderFilter === gender
+                  ? "bg-zinc-900 text-white"
+                  : "text-zinc-500 hover:text-zinc-800"
+              }`}
+            >
+              {gender === "weiblich" ? "Weiblich" : "Männlich"}
+            </button>
+          ))}
+        </div>
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {models.map((model) => {
+          {visibleModels.map((model) => {
             const isSelected = selected === model.key;
             const badge =
               currentModelKey === model.key

@@ -105,11 +105,27 @@ export function bodyPartMapping(hauptkategorie: string | null): BodyPartMapping 
 // sehr detaillierte Beschreibung, (2) ein echtes Referenzfoto des Models als zweites Eingabebild
 // in generateProductImageVariant (image-generation.ts) - absolute Pixel-Identität über
 // Generierungen hinweg ist damit nicht garantierbar, nur bestmöglich angenähert.
-export type ModelKey = "sophia" | "claire" | "jen" | "amara";
+export type ModelKey =
+  | "sophia"
+  | "claire"
+  | "jen"
+  | "amara"
+  | "adrian"
+  | "luca"
+  | "kenji"
+  | "malik";
+
+// Geschlecht rein für die Filterung in der manuellen Modellauswahl (ModelPickerModal) - hat keinen
+// Einfluss auf assignModel()/die automatische Kategorie-Zuordnung, die weiterhin nur innerhalb der
+// weiblichen 4 läuft (Bestandslogik). Die männlichen 4 (aus "03 MARINELL Model DNA (Maennlich).docx")
+// sind bewusste Gegenstücke mit denselben 4 Markenrollen (Vertrauen/Leichtigkeit/Präzision/Stärke),
+// aber absichtlich leicht abweichenden Hauttönen statt 1:1 kopierter Werte - siehe die Doku.
+export type ModelGender = "weiblich" | "männlich";
 
 export type MarinellModel = {
   key: ModelKey;
   name: string;
+  gender: ModelGender;
   referenceImageUrl: string;
   physicalDescription: string;
   // Kurzbeschreibung für die manuelle Modellauswahl in der UI (nicht Teil des Bild-Prompts).
@@ -123,6 +139,7 @@ export const MARINELL_MODELS: Record<ModelKey, MarinellModel> = {
   sophia: {
     key: "sophia",
     name: "Sophia",
+    gender: "weiblich",
     referenceImageUrl: `${MODEL_REFERENCE_BASE}/sophia.jpg`,
     tagline:
       "Ruhiges Vertrauen und klassische Eleganz - mittelbraune Wellen, Haselnussaugen. Das Gesicht " +
@@ -140,6 +157,7 @@ export const MARINELL_MODELS: Record<ModelKey, MarinellModel> = {
   claire: {
     key: "claire",
     name: "Claire",
+    gender: "weiblich",
     referenceImageUrl: `${MODEL_REFERENCE_BASE}/claire.jpg`,
     tagline:
       "Mediterrane Leichtigkeit - honigblonde Beach Waves, helle Augen. Das Gesicht für " +
@@ -154,6 +172,7 @@ export const MARINELL_MODELS: Record<ModelKey, MarinellModel> = {
   jen: {
     key: "jen",
     name: "Jen",
+    gender: "weiblich",
     referenceImageUrl: `${MODEL_REFERENCE_BASE}/jen.jpg`,
     tagline:
       "Urbane Präzision - dunkler Bob mit Pony, ruhiger Blick. Das Gesicht für moderne " +
@@ -168,6 +187,7 @@ export const MARINELL_MODELS: Record<ModelKey, MarinellModel> = {
   amara: {
     key: "amara",
     name: "Amara",
+    gender: "weiblich",
     referenceImageUrl: `${MODEL_REFERENCE_BASE}/amara.jpg`,
     tagline:
       "Skulpturale Stärke - natürliche Locken, warmer Ebenholzton. Das Gesicht für " +
@@ -182,6 +202,80 @@ export const MARINELL_MODELS: Record<ModelKey, MarinellModel> = {
       "künstliche Weichzeichnung. Hohe Wangenknochen, klare Kieferlinie, volle Lippen, elegante " +
       "Nase, harmonische Proportionen - eine Schönheit mit Charakter statt Perfektion. " +
       "Selbstbewusste, gelassene, würdevolle, präsente Ausstrahlung, ohne dominant zu wirken.",
+  },
+  // --- männliche Gegenstücke (aus "03 MARINELL Model DNA (Maennlich).docx") ------------------
+  // Gleiche 4 Markenrollen wie oben (Adrian~Sophia, Luca~Claire, Kenji~Jen, Malik~Amara), Hauttöne
+  // bewusst nicht 1:1 von der jeweiligen Frau übernommen, sondern leicht variiert.
+  adrian: {
+    key: "adrian",
+    name: "Adrian",
+    gender: "männlich",
+    referenceImageUrl: `${MODEL_REFERENCE_BASE}/adrian.jpg`,
+    tagline:
+      "Ruhiges Vertrauen und klassische Eleganz - dunkelbraunes Haar, Haselnuss-/Grünaugen. Das " +
+      "Gesicht für zeitloses Fine Jewellery (Ring, Anhänger, Collier).",
+    physicalDescription:
+      "Europäischer Mann, 35 Jahre, 186cm, schlanke, athletische Figur mit langen, aufrechten " +
+      "Proportionen. Dunkelbraune Haare mit natürlichem Glanz, kurz bis mittellang, lässig " +
+      "zurückgekämmt oder leicht in die Stirn fallend, niemals streng gestylt. Kurzer, gepflegter " +
+      "Dreitagebart. Haselnuss- bis grüne, warme Augen mit ruhigem, klarem Blick. Helle bis " +
+      "mittlere Haut mit kühlem, dezent rosé-olivem Unterton, natürlicher Porenstruktur - keine " +
+      "übertriebene Beauty-Retusche, keine makellose Plastikhaut. Kantig-ovales Gesicht mit hohen " +
+      "Wangenknochen, markantem weichem Kinn, gerader Nase, symmetrisch, aber nie künstlich " +
+      "perfekt. Ruhige, vertrauenswürdige, warmherzige, intelligente Ausstrahlung.",
+  },
+  luca: {
+    key: "luca",
+    name: "Luca",
+    gender: "männlich",
+    referenceImageUrl: `${MODEL_REFERENCE_BASE}/luca.jpg`,
+    tagline:
+      "Mediterrane Leichtigkeit - dunkelblondes Beach Hair, helle Augen. Das Gesicht für " +
+      "Everyday-Diamonds und Alltagsschmuck (Armband, Armreif).",
+    physicalDescription:
+      "Europäisch-mediterraner Mann, 33 Jahre, 189cm, schlanke, drahtig-athletische Figur mit " +
+      "breiten Schultern und lässiger Eleganz. Dunkelblonde bis hellbraune Haare mit natürlicher " +
+      "Textur und leichter Sonnenbewegung (Beach Hair), kurz bis mittellang. Heller, kurzer " +
+      "Bartschatten. Graublaue bis grüne Augen mit offenem, lebensfrohem Blick. " +
+      "Golden-bronzefarbene, sonnengeküsste Haut mit vereinzelten feinen Sonnenspuren, gesunder " +
+      "natürlicher Hautstruktur, keine künstliche Retusche. Markante Wangenknochen, breites, " +
+      "strahlendes Lächeln, kantige, freundliche Kieferlinie. Offene, lebensfrohe, stilvolle, " +
+      "charismatische Ausstrahlung.",
+  },
+  kenji: {
+    key: "kenji",
+    name: "Kenji",
+    gender: "männlich",
+    referenceImageUrl: `${MODEL_REFERENCE_BASE}/kenji.jpg`,
+    tagline:
+      "Urbane Präzision - kurzer, strukturierter Schnitt, ruhiger Blick. Das Gesicht für moderne " +
+      "High Jewellery und Ohrschmuck.",
+    physicalDescription:
+      "Ostasiatischer Mann, 34 Jahre, 183cm, schlanke, sehnige, aufrechte Statur mit ruhiger " +
+      "Präsenz. Tiefschwarze Haare mit seidigem Glanz, kurz geschnitten, moderner strukturierter " +
+      "Schnitt. Glattrasiert oder minimaler Konturbart. Dunkelbraune, ruhige, präzise, wache " +
+      "Augen. Warmer, neutraler Hautton mit feiner natürlicher Struktur, kein Photoshop-Look. " +
+      "Feine, klare Gesichtszüge, definierte Kieferlinie, hohe Wangenknochen, ruhige, " +
+      "konzentrierte Mimik. Intelligente, diskrete, ästhetische, selbstbewusste Ausstrahlung.",
+  },
+  malik: {
+    key: "malik",
+    name: "Malik",
+    gender: "männlich",
+    referenceImageUrl: `${MODEL_REFERENCE_BASE}/malik.jpg`,
+    tagline:
+      "Skulpturale Stärke - kurzer Vollbart, warmer Mahagonyton. Das Gesicht für außergewöhnliche " +
+      "Einzelstücke und High-Carat-Diamanten.",
+    physicalDescription:
+      "Mann mit ostafrikanischen Wurzeln, 41 Jahre, 191cm, sehr schlanke, hochgewachsene, " +
+      "athletische Silhouette mit ruhiger, würdevoller Haltung. Natürlich tiefschwarze, kurze " +
+      "Haare, sauber gefadet oder minimal gelockt, gesunder seidiger Glanz, niemals künstlich " +
+      "gestylt. Kurzer, dichter, gepflegter Vollbart mit klaren Konturen. Dunkelbraune, ruhige, " +
+      "intensive, sehr ausdrucksstarke Augen. Warmer Mahagoni-/Kastanienbraunton der Haut mit " +
+      "goldenen Reflexen, natürliche Hautstruktur mit sichtbaren Poren, feiner Glow durch Licht, " +
+      "keine übermäßige Retusche. Hohe Wangenknochen, klare markante Kieferlinie, volle Lippen, " +
+      "gerade Nase, harmonische, kraftvolle Proportionen. Selbstbewusste, gelassene, würdevolle, " +
+      "präsente Ausstrahlung, ohne dominant zu wirken.",
   },
 };
 

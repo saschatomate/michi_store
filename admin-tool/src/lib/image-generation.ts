@@ -1,7 +1,14 @@
 import "server-only";
 import OpenAI, { toFile } from "openai";
 import type { sourceProducts } from "@/db/schema";
-import { bodyPartMapping, assignModel, MARINELL_MODELS, type MarinellModel, type PoseVariant } from "@/lib/image-facts";
+import {
+  bodyPartMapping,
+  assignModel,
+  MARINELL_MODELS,
+  type MarinellModel,
+  type ModelGender,
+  type PoseVariant,
+} from "@/lib/image-facts";
 import { estimateOpenAiImageCost, recordApiUsage } from "@/lib/cost-tracking";
 import { diamondSlots, coloredStoneSlots } from "@/lib/product-facts";
 
@@ -13,7 +20,7 @@ const OPENAI_IMAGE_MODEL = "gpt-image-1.5";
 // Bildsprache statt lauter Statussymbolik. Großzügiger, eleganter Bildausschnitt, der spürbar mehr
 // vom Model zeigt als ein reines Produkt-Makrofoto - keine isolierte Hand/Ohr/Hals-Nahaufnahme vor
 // leerem Hintergrund.
-const SYSTEM_INSTRUCTIONS =
+const SYSTEM_INSTRUCTIONS_BEFORE_CLOTHING =
   "MARINELL Editorial-Luxus-Schmuckfotografie: 'Luxury, lived discreetly' - die Bildsprache ist " +
   "leise, ruhig, nie laut oder aufdringlich. Sie transportiert Ruhe, Eleganz, Wärme, Vertrauen und " +
   "Zeitlosigkeit - NICHT Status, Reichtum oder Dekadenz. Großzügiger, eleganter Bildausschnitt, " +
@@ -26,9 +33,24 @@ const SYSTEM_INSTRUCTIONS =
   "Cashmere, Black, Warm Gold, Soft Taupe. Licht: warmes 'Golden Hour'/Champagnerlicht - großes, " +
   "weiches Beauty-Light von links oben, warme Farbtemperatur, feines Kantenlicht, sanfte Schatten, " +
   "keine harten Reflexe. Kein vollständiges Gesicht im Bild (Augen bleiben außerhalb des " +
-  "Bildausschnitts), ruhige, unaufdringliche Ausstrahlung. Kleidung: schwarzes Seiden-Slip-Kleid, " +
-  "champagnerfarbenes Satinkleid oder cremefarbener Kaschmir/Blazer - schlicht, ohne Muster oder " +
-  "Logos, die nicht vom Schmuckstück ablenken. Natürliche Retusche: echte Hautstruktur mit " +
+  "Bildausschnitts), ruhige, unaufdringliche Ausstrahlung. ";
+
+// Kleidung ist bewusst NICHT Teil von SYSTEM_INSTRUCTIONS, sondern hängt vom Geschlecht des
+// zugewiesenen Models ab (seit Einführung der männlichen Gegenstücke Adrian/Luca/Kenji/Malik) -
+// ein Kleid wäre bei einem männlichen Model falsch. Beide Varianten bleiben in derselben
+// Farbwelt/Materialität wie der Rest der Bildsprache (Seide, Kaschmir, Schwarz, Champagner).
+const CLOTHING_BY_GENDER: Record<ModelGender, string> = {
+  weiblich:
+    "Kleidung: schwarzes Seiden-Slip-Kleid, champagnerfarbenes Satinkleid oder cremefarbener " +
+    "Kaschmir/Blazer - schlicht, ohne Muster oder Logos, die nicht vom Schmuckstück ablenken. ",
+  männlich:
+    "Kleidung: cremefarbener Kaschmir-/Rollkragenpullover, offenes weißes oder schwarzes " +
+    "Leinenhemd oder schlicht geschnittener schwarzer Blazer - schlicht, ohne Muster oder Logos, " +
+    "die nicht vom Schmuckstück ablenken. ",
+};
+
+const SYSTEM_INSTRUCTIONS_AFTER_CLOTHING =
+  "Natürliche Retusche: echte Hautstruktur mit " +
   "sichtbaren Poren und ggf. dezenten Sommersprossen bleibt erhalten, keine Plastikhaut, keine " +
   "übertriebene Beauty-Retusche. Ruhige editorial Farbgebung mit sanftem Kontrast. Kein Text, kein " +
   "Logo, kein Wasserzeichen im Bild. Kein weiterer Schmuck außer dem abgebildeten Referenzstück " +
@@ -43,6 +65,10 @@ const SYSTEM_INSTRUCTIONS =
   "Fingern oder einem fehlenden Daumen. Bei Ringen: Der Ring sitzt vollständig auf GENAU EINEM " +
   "Finger und umschließt nur diesen einen Finger - er darf niemals zwei Finger überbrücken, " +
   "verbinden oder wie ein Steg zwischen zwei Fingern wirken.";
+
+function systemInstructionsFor(gender: ModelGender): string {
+  return SYSTEM_INSTRUCTIONS_BEFORE_CLOTHING + CLOTHING_BY_GENDER[gender] + SYSTEM_INSTRUCTIONS_AFTER_CLOTHING;
+}
 
 function referenceImageUrl(product: SourceProductRow): string | null {
   if (product.freistellerUrl) return product.freistellerUrl;
@@ -82,7 +108,7 @@ export function defaultImageBasePrompt(product: SourceProductRow): string {
   if (!mapping) return "";
   const model = resolveModel(product);
   return (
-    `${SYSTEM_INSTRUCTIONS} Das Model in diesem Bild: ${model.physicalDescription} Setze DIESES ` +
+    `${systemInstructionsFor(model.gender)} Das Model in diesem Bild: ${model.physicalDescription} Setze DIESES ` +
     `Schmuckstück (aus dem Referenzbild) unverändert auf ${mapping.bodyPart}. ${mapping.compositionHint}.`
   );
 }
