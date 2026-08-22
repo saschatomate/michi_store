@@ -53,11 +53,22 @@ const SYSTEM_INSTRUCTIONS_AFTER_CLOTHING =
   "Natürliche Retusche: echte Hautstruktur mit " +
   "sichtbaren Poren und ggf. dezenten Sommersprossen bleibt erhalten, keine Plastikhaut, keine " +
   "übertriebene Beauty-Retusche. Ruhige editorial Farbgebung mit sanftem Kontrast. Kein Text, kein " +
-  "Logo, kein Wasserzeichen im Bild. Kein weiterer Schmuck außer dem abgebildeten Referenzstück " +
-  "sichtbar. Verändere das Schmuckstück selbst NICHT - Form, Fassung, Steinanzahl und Material " +
+  "Logo, kein Wasserzeichen im Bild. " +
+  "KRITISCH bei zusätzlichem Schmuck: Außer dem einen abgebildeten Referenzstück ist AUSSCHLIESSLICH " +
+  "kein weiteres Schmuckstück im Bild sichtbar - keine Ohrringe, keine Kette/kein Anhänger, keine " +
+  "Ringe, keine Armbänder/Armreifen, keine Uhr -, auch nicht dezent, teilweise verdeckt oder nur " +
+  "angedeutet. Sind Ohren, Hals, Hände oder Handgelenke im Bild sichtbar, aber nicht die " +
+  "Körperpartie mit dem Referenzstück, bleiben sie komplett schmucklos. " +
+  "Verändere das Schmuckstück selbst NICHT - Form, Fassung, Steinanzahl und Material " +
   "müssen exakt wie im Referenzbild bleiben. Spiegle oder drehe das Schmuckstück NICHT - " +
   "Vorderseite, Rückseite sowie Innen- und Außenseite müssen exakt wie im Referenzbild ausgerichtet " +
   "bleiben. Generiere nur die Körperpartie und die Umgebung drumherum. " +
+  "KRITISCH bei Proportionen: Skaliere das gesamte Schmuckstück proportional zur tatsächlichen " +
+  "Anatomie und zur Bildperspektive des Models, sodass seine reale Größe am Finger, Ohr, Hals oder " +
+  "Handgelenk glaubwürdig und maßstabsgetreu erscheint - orientiere dich an realistischen " +
+  "menschlichen Größenverhältnissen (z.B. Fingerbreite, Ohrläppchengröße, Handgelenksumfang) statt " +
+  "das Schmuckstück zur besseren Bildwirkung zu vergrößern oder zu verkleinern, auch wenn das " +
+  "freigestellte Referenzfoto des Schmuckstücks selbst keine Größenreferenz enthält. " +
   "KRITISCH bei Händen: Die Hand muss anatomisch absolut korrekt sein - genau fünf Finger inklusive " +
   "sichtbarem Daumen, jeder Finger einzeln und klar voneinander getrennt, natürliche Proportionen " +
   "und Gelenke. Vermeide stark gekrümmte, verschränkte oder zur Faust geballte Fingerhaltungen, bei " +
@@ -214,9 +225,12 @@ export function productFactsPromptAddition(product: SourceProductRow): string {
     `exakt die angegebene Steinfarbe. Falls oben ein farbiger Diamant (z.B. brauner, gelber oder ` +
     `schwarzer Diamant) genannt ist, zeigt der Diamant exakt diese Farbe statt eines Standard-` +
     `weißen/farblosen Diamanten - ist dort KEINE Diamantfarbe genannt, bleibt der Diamant weiß/farblos. ` +
-    `Die Größe des Schmuckstücks im Bild muss zu den angegebenen Maßen passen (z.B. wirkt ein sehr ` +
-    `schmales/kleines Maß entsprechend zierlich neben Hand, Hals oder Handgelenk, ein großes Maß ` +
-    `entsprechend prägnant).`
+    `KRITISCH bei der Größe: Die oben genannten Maße (mm/cm) sind die tatsächliche Realgröße des ` +
+    `Schmuckstücks - skaliere es im Bild exakt proportional zur echten Anatomie des Models ` +
+    `entsprechend dieser Maße, NICHT nach freiem Ermessen oder zur besseren Bildwirkung. Ein sehr ` +
+    `schmales/kleines Maß muss entsprechend zierlich und unauffällig neben Hand, Ohr, Hals oder ` +
+    `Handgelenk wirken, ein großes Maß entsprechend prägnant und größer - vermeide sowohl ein ` +
+    `unrealistisch übergroßes als auch ein zu kleines Schmuckstück.`
   );
 }
 
@@ -264,8 +278,11 @@ export async function generateProductImageVariant(
     `unverändert dargestellt werden muss. Das ZWEITE Bild zeigt das Model ${model.name} auf einer ` +
     `anderen Aufnahme und dient AUSSCHLIESSLICH als Referenz für Gesicht, Haare, Hautunterton und ` +
     `fotografischen Stil (Pose, Kamerawinkel, Licht, Bildqualität). Übernimm aus dem zweiten Bild ` +
-    `NIEMALS das dort abgebildete Schmuckstück, dessen Design, Form oder Fassung - das im ` +
-    `generierten Bild sichtbare Schmuckstück muss zu 100% aus dem ERSTEN Bild stammen.`;
+    `NIEMALS irgendeinen dort sichtbaren Schmuck (auch keine Ohrringe, Kette, Ringe oder Armbänder) ` +
+    `- weder dessen Design noch die bloße Tatsache, dass auf diesem Foto Schmuck getragen wird. Das ` +
+    `im generierten Bild sichtbare Schmuckstück muss zu 100% aus dem ERSTEN Bild stammen und ist ` +
+    `das EINZIGE Schmuckstück im gesamten generierten Bild - das Model trägt sonst keinerlei ` +
+    `Schmuck, unabhängig davon, was auf dem zweiten Referenzfoto zu sehen ist.`;
 
   const factsAddition = productFactsPromptAddition(product);
 
