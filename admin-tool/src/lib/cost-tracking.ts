@@ -40,6 +40,12 @@ const MOST_EXPENSIVE_IMAGE_PRICING = Object.values(OPENAI_IMAGE_PRICING_PER_MTOK
   candidate.output > priciest.output ? candidate : priciest,
 );
 
+// Zusätzlicher Aufschlag oben auf den bereits teuersten Tarif - explizit angefordert, weil die
+// reine "teuerstes Model"-Marge dem Nutzer noch nicht genug Puffer war. 1.5 = 50% mehr als
+// MOST_EXPENSIVE_IMAGE_PRICING. Wirkt multiplikativ auf den kompletten Bild-Kostenwert (Budget-
+// Widget, Kosten-Badge pro Bild) - betrifft nur die interne Anzeige, nicht die echte OpenAI-Rechnung.
+const IMAGE_COST_SAFETY_MARGIN_MULTIPLIER = 1.5;
+
 type ClaudeUsage = {
   input_tokens: number;
   output_tokens: number;
@@ -71,11 +77,11 @@ export function estimateOpenAiImageCost(model: string, usage: OpenAiImageUsage |
   const textTokens = usage.input_tokens_details?.text_tokens ?? 0;
   const imageTokens = usage.input_tokens_details?.image_tokens ?? 0;
   const outputTokens = usage.output_tokens ?? 0;
-  return (
+  const baseCost =
     (textTokens / 1_000_000) * pricing.text +
     (imageTokens / 1_000_000) * pricing.image +
-    (outputTokens / 1_000_000) * pricing.output
-  );
+    (outputTokens / 1_000_000) * pricing.output;
+  return baseCost * IMAGE_COST_SAFETY_MARGIN_MULTIPLIER;
 }
 
 // Schreibt einen Ledger-Eintrag. Darf eine ansonsten erfolgreiche Generierung nie zum Scheitern
