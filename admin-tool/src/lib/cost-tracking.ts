@@ -14,12 +14,31 @@ const CLAUDE_PRICING_PER_MTOK: Record<string, { input: number; output: number }>
   "claude-opus-5": { input: 5, output: 25 },
 };
 
-// gpt-image-1.5 rechnet nicht pro Bild ab, sondern über Text-/Bild-Input- und Bild-Output-Tokens
-// (wie bei den Chat-Modellen) - die exakten Zahlen kommen aus response.usage der Images-API.
+// Kein Bild-Model rechnet pro Bild ab, sondern über Text-/Bild-Input- und Bild-Output-Tokens (wie
+// bei den Chat-Modellen) - die exakten Token-Zahlen kommen aus response.usage der Images-API. Alle
+// von OpenAI aktuell angebotenen Bild-Modelle sind hier hinterlegt (auch die nicht selbst
+// aufgerufenen), damit MOST_EXPENSIVE_IMAGE_PRICING unten korrekt das teuerste ermitteln kann.
 const OPENAI_IMAGE_PRICING_PER_MTOK: Record<string, { text: number; image: number; output: number }> = {
-  "gpt-image-1.5": { text: 5, image: 8, output: 32 },
   "gpt-image-1": { text: 5, image: 10, output: 40 },
+  "gpt-image-1.5": { text: 5, image: 8, output: 32 },
+  "gpt-image-1-mini": { text: 2, image: 2.5, output: 8 },
+  "gpt-image-2": { text: 5, image: 8, output: 30 },
+  "chatgpt-image-latest": { text: 5, image: 8, output: 32 },
 };
+
+// Kostenanzeige (Budget-Widget, Kosten-Badge pro Bild) rechnet bewusst konservativ: unabhängig
+// davon, welches Model tatsächlich aufgerufen wurde (aktuell gpt-image-1.5, s. image-generation.ts
+// OPENAI_IMAGE_MODEL), wird immer mit dem Tarif des teuersten hinterlegten Bild-Models gerechnet -
+// Stand jetzt gpt-image-1 ($40 statt $32 pro 1M Output-Tokens). Das ist eine bewusste
+// Sicherheitsmarge/Puffer für die interne Budget-Anzeige (die ohnehin nur eine manuell gepflegte
+// Obergrenze ist, kein echter OpenAI-Kontostand, s. getBudgetSummary), nicht die tatsächliche
+// OpenAI-Rechnung. Wird aus der Tabelle oben ermittelt (höchster Output-Preis) statt hart codiert,
+// damit ein künftig noch teureres Model die Marge automatisch mit anhebt. Der im Ledger geloggte
+// "model"-Wert bleibt trotzdem das tatsächlich aufgerufene Model (Audit-Trail) - nur der Preis, mit
+// dem gerechnet wird, ist konservativ.
+const MOST_EXPENSIVE_IMAGE_PRICING = Object.values(OPENAI_IMAGE_PRICING_PER_MTOK).reduce((priciest, candidate) =>
+  candidate.output > priciest.output ? candidate : priciest,
+);
 
 type ClaudeUsage = {
   input_tokens: number;
@@ -42,11 +61,13 @@ type OpenAiImageUsage = {
 
 export function estimateOpenAiImageCost(model: string, usage: OpenAiImageUsage | undefined | null): number {
   if (!usage) return 0;
-  const pricing = OPENAI_IMAGE_PRICING_PER_MTOK[model];
-  if (!pricing) {
-    console.warn(`[cost-tracking] Keine Preistabelle für Bild-Model "${model}" - Kosten werden als 0 gebucht.`);
-    return 0;
+  if (!OPENAI_IMAGE_PRICING_PER_MTOK[model]) {
+    console.warn(
+      `[cost-tracking] Bild-Model "${model}" fehlt in OPENAI_IMAGE_PRICING_PER_MTOK - rechne trotzdem ` +
+        `konservativ mit dem teuersten hinterlegten Tarif weiter (siehe MOST_EXPENSIVE_IMAGE_PRICING).`,
+    );
   }
+  const pricing = MOST_EXPENSIVE_IMAGE_PRICING;
   const textTokens = usage.input_tokens_details?.text_tokens ?? 0;
   const imageTokens = usage.input_tokens_details?.image_tokens ?? 0;
   const outputTokens = usage.output_tokens ?? 0;

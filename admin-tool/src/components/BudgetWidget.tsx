@@ -44,7 +44,10 @@ export function BudgetWidget({ budget }: { budget: BudgetSummary }) {
   return (
     <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+        <span
+          className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500"
+          title="Bild-Kosten werden konservativ mit dem Tarif des teuersten OpenAI-Bildmodells kalkuliert (Sicherheitsmarge) - kann daher über der tatsächlichen OpenAI-Rechnung liegen."
+        >
           <Wallet size={13} />
           API-Budget
         </span>
