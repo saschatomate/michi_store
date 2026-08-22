@@ -174,6 +174,41 @@ function describeDiamondColor(value: string | undefined): string | null {
   return null;
 }
 
+// "Skaliere maßstabsgetreu" ist für ein Bildmodell zu abstrakt, wenn das freigestellte
+// Referenzfoto (wie bei Produktfotos üblich bildfüllend) keinen echten Größenhinweis liefert -
+// besonders bei sehr kleinen/dezenten Stücken (z.B. ein 11mm-Anhänger-Cluster) hat das Modell dann
+// nichts, woran es sich orientieren kann, und macht das Schmuckstück tendenziell zu groß. Ein
+// bekanntes Alltagsobjekt gibt einen konkreten visuellen Anker, den Bildmodelle aus ihren
+// Trainingsdaten zuverlässig kennen. Bands grob an echten Objektgrößen orientiert (Stecknadelkopf
+// ~2mm, Reiskorn ~6mm, Kichererbse ~8mm, 1-Cent-Münze ⌀16mm, Daumennagel ~15mm, 2-Euro-Münze
+// ⌀26mm, Walnuss ~30mm) - Genauigkeit ist zweitrangig, es geht um eine intuitive Größenordnung.
+function everydayObjectComparison(mm: number): string {
+  if (mm < 4) return "ein Stecknadelkopf";
+  if (mm < 7) return "ein Reiskorn";
+  if (mm < 10) return "eine Kichererbse oder ein kleiner Hemdenknopf";
+  if (mm < 15) return "eine Erbse oder eine 1-Cent-Münze (Durchmesser ca. 16mm)";
+  if (mm < 20) return "ein Daumennagel oder eine Kirsche";
+  if (mm < 28) return "eine 2-Euro-Münze (Durchmesser ca. 26mm)";
+  if (mm < 40) return "eine Walnuss";
+  return "eine Streichholzschachtel oder größer";
+}
+
+// Ermittelt die für den Größeneindruck maßgebliche sichtbare Motivgröße. Bewusst NUR
+// Breite/Höhe (nicht Stärke/Länge/Ringgröße) - das sind die beiden Maße, die auch schon in
+// "Maße:" oben auftauchen und die sichtbare Ausdehnung des Motivs beschreiben, nicht Dicke oder
+// Ketten-/Umfangslänge. Durchmesser wird nur als Fallback genutzt und bei Armreifen/Armbändern
+// bewusst ausgeschlossen, weil er dort die Handgelenks-Passform meint (immer groß) statt der
+// sichtbaren Motivgröße - ein Alltagsobjekt-Vergleich wäre dort irreführend.
+function motifSizeMm(product: SourceProductRow): number | null {
+  const faceDims = [product.breite, product.hoehe].filter(
+    (v): v is number => v !== null && v > 0,
+  );
+  if (faceDims.length > 0) return Math.max(...faceDims);
+  const isWristFit = product.hauptkategorie === "Armreifen" || product.hauptkategorie === "Armbänder";
+  if (product.durchmesser && product.durchmesser > 0 && !isWristFit) return product.durchmesser;
+  return null;
+}
+
 // Holt die echten Produktdaten (Material/Legierung, Diamant-/Farbstein-Details, Maße) und baut
 // daraus einen Fakten-Block für den Bild-Prompt - der Bildgenerator soll Größe, Proportionen und
 // Farben NICHT nur aus dem (ggf. unterschiedlich beleuchteten/komprimierten) Referenzfoto ableiten,
@@ -234,6 +269,14 @@ export function productFactsPromptAddition(product: SourceProductRow): string {
 
   if (facts.length === 0) return "";
 
+  const motifMm = motifSizeMm(product);
+  const sizeAnchor = motifMm
+    ? ` Zur Einordnung der realen Größe: Das sichtbare Motiv ist mit ca. ${motifMm}mm ungefähr so ` +
+      `groß wie ${everydayObjectComparison(motifMm)} - orientiere dich an dieser Alltagsgröße für ` +
+      `den Maßstab im Bild, NICHT an der (typischerweise bildfüllenden) Größe im freigestellten ` +
+      `Referenzfoto.`
+    : "";
+
   return (
     ` Echte Fakten zu diesem Schmuckstück aus den Produktdaten (gelten zusätzlich zum Referenzbild, ` +
     `nicht nur optisch aus ihm ableiten): ${facts.join(". ")}. Diese Fakten bestimmen Farbe und ` +
@@ -248,7 +291,7 @@ export function productFactsPromptAddition(product: SourceProductRow): string {
     `entsprechend dieser Maße, NICHT nach freiem Ermessen oder zur besseren Bildwirkung. Ein sehr ` +
     `schmales/kleines Maß muss entsprechend zierlich und unauffällig neben Hand, Ohr, Hals oder ` +
     `Handgelenk wirken, ein großes Maß entsprechend prägnant und größer - vermeide sowohl ein ` +
-    `unrealistisch übergroßes als auch ein zu kleines Schmuckstück.`
+    `unrealistisch übergroßes als auch ein zu kleines Schmuckstück.${sizeAnchor}`
   );
 }
 
