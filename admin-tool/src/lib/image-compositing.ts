@@ -3,7 +3,6 @@ import OpenAI, { toFile } from "openai";
 import type { sourceProducts } from "@/db/schema";
 import type { MarinellModel, PoseVariant } from "@/lib/image-facts";
 import { motifSizeMm, referenceImageUrl, fetchImageBuffer } from "@/lib/image-generation";
-import { estimateOpenAiImageCost, recordApiUsage } from "@/lib/cost-tracking";
 
 type SourceProductRow = typeof sourceProducts.$inferSelect;
 
@@ -31,11 +30,16 @@ async function loadSharp() {
 // Schmuckstücken (<15mm) nicht zuverlässig befolgt - es orientiert sich stärker an der visuellen
 // Prominenz des Produktfotos selbst. Dieser Pfad umgeht das Problem, indem die Größe NICHT der KI
 // überlassen wird: das Produktfoto wird rechnerisch korrekt auf ein festes, wiederverwendetes
-// "leeres" Model-Foto montiert (reine Bildmathematik über sharp), und die KI wird nur noch für
-// einen eng eingegrenzten Nachbearbeitungsschritt (Licht/Schatten/Kontaktschatten) eingesetzt, bei
-// dem sie explizit angewiesen wird, Größe/Position NICHT zu verändern - das hat sich im Test
-// (Produkt 4R267R8) als zuverlässig herausgestellt (Ergebnis vor/nach der KI-Politur pixelgleich
-// in der Größe).
+// "leeres" Model-Foto montiert (reine Bildmathematik über sharp) - keine KI-Generierung mehr nötig.
+//
+// Ursprünglich gab es hier zusätzlich einen KI-Politur-Schritt (nur Licht/Schatten anpassen). Der
+// ist seit 2026-08-23 ABGESCHALTET (siehe Kommentar bei harmonizeComposite): bei 4R267R8 hat gpt-
+// image-1.5 dabei trotz strikter "Design nicht verändern"-Anweisung das kaum lesbare, nur ~30px
+// große Motiv neu interpretiert - aus 3 Steinen wurde ein unklarer Blob, die Kette teils entfernt.
+// Der reine Mathematik-Composite (ohne diesen Schritt) ist dagegen korrekt, nur naturgemäß etwas
+// weich. compositeJewelryVariant() liefert daher aktuell den rohen Composite direkt - dadurch ist
+// dieser Pfad komplett kostenlos (keine OpenAI-Aufrufe mehr), bis ein zuverlässigerer
+// Politur-Ansatz gefunden ist.
 //
 // Deutliche Einschränkung, Stand jetzt: nur EINE Model/Pose/Kategorie-Kombination ist kalibriert
 // (Sophia, Frontal, Colliers/Anhänger). Für alle anderen Kombinationen wirft
@@ -61,12 +65,32 @@ export type PoseCalibration = {
 // Schlüssel: `${modelKey}:${poseKey}:${kategorieBucket}`. Colliers/Anhänger und Armbänder/
 // Armreifen teilen sich bewusst denselben Bucket (gleiche Körperpartie/Rahmung), analog zu
 // estimatedFrameWidthMm in image-facts.ts.
+// pxPerMm bewusst für alle 3 Sophia-Hals-Posen identisch (2.76, aus dem Pupillenabstand im
+// Frontal-Foto) statt pro Foto neu über die Pupillen gemessen - bei Dreiviertelprofil/Seitlich
+// verzerrt die Kopfdrehung den scheinbaren Pupillenabstand perspektivisch (zu klein), eine direkte
+// Neumessung dort würde das Motiv fälschlich verkleinern. Kopf-/Bildausschnittgröße ist in allen 3
+// Fotos (gleicher Prompt-Rahmen) sichtbar konsistent, daher ist die Wiederverwendung die
+// verlässlichere Annahme.
 export const POSE_CALIBRATIONS: Record<string, PoseCalibration> = {
   "sophia:frontal:Colliers": {
     baseImageUrl:
       "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-frontal-hals.png",
     anchorXPercent: 50,
     anchorYPercent: 64,
+    pxPerMm: 2.76,
+  },
+  "sophia:dreiviertelprofil:Colliers": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-dreiviertelprofil-hals.png",
+    anchorXPercent: 52,
+    anchorYPercent: 63,
+    pxPerMm: 2.76,
+  },
+  "sophia:seitlich:Colliers": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-seitlich-hals.png",
+    anchorXPercent: 48,
+    anchorYPercent: 62,
     pxPerMm: 2.76,
   },
 };
@@ -138,7 +162,12 @@ export type MotifCropOverride = { left: number; top: number; width: number; heig
 // Stil braucht vorerst denselben manuellen Schritt, bis eine robustere automatische Erkennung
 // (z.B. über eine Vision-API statt reinem Alpha-Trim) existiert.
 const PRODUCT_MOTIF_OVERRIDES: Record<string, MotifCropOverride> = {
-  "4R267R8": { left: 840, top: 1100, width: 540, height: 640 },
+  // Bewusst der BREITE Ausschnitt (mit Kette), nicht nur die enge Cluster-Bounding-Box
+  // (840/1100/540/640) - bei so starker Verkleinerung verschmelzen die 3 einzelnen Steine sonst zu
+  // einem nicht mehr erkennbaren Blob. Der breitere Ausschnitt ändert daran zwar nichts an der
+  // Auflösung des Clusters selbst (der bleibt gleich groß), sorgt aber wenigstens für die auch
+  // sichtbare Kette; siehe compositeRaw()-Kommentar zur eigentlichen Auflösungsgrenze.
+  "4R267R8": { left: 400, top: 0, width: 1200, height: 1800 },
 };
 
 async function resolveMotifCrop(
@@ -194,13 +223,19 @@ export async function compositeRaw(
     .toBuffer();
 }
 
-// Einziger KI-Aufruf in diesem Pfad: passt NUR Licht/Schatten/Kontaktschatten des bereits fertig
-// (und korrekt skaliert) zusammengesetzten Fotos an, mit expliziter Anweisung, Größe/Position NICHT
-// zu verändern. input_fidelity bewusst "high", damit das Composite so treu wie möglich erhalten
-// bleibt (Gegenteil des Problems beim klassischen Weg: dort war "high" das Problem, weil es das
-// Produktfoto zu wörtlich als Größenvorlage genommen hat - hier ist "wörtlich übernehmen" genau
-// das Ziel, wir wollen ja NUR die Beleuchtung ändern).
-async function harmonizeComposite(
+// ABGESCHALTET (Stand jetzt nicht mehr im Pfad aufgerufen) - Fund vom 2026-08-23 bei 4R267R8:
+// Der reine Mathematik-Composite (compositeRaw, ohne diesen Schritt) zeigt das Motiv korrekt -
+// alle 3 Steine, die Akzent-Diamanten und die Kette sind sauber erkennbar, nur naturgemäß etwas
+// weich (das Cluster ist bei Realgröße nur ~30px groß). Dieser KI-Politur-Schritt sollte NUR Licht/
+// Schatten anpassen, hat aber bei diesem winzigen, dadurch für die KI ambigen Motiv stattdessen das
+// halbe Design neu erfunden (3 Steine wurden zu einem unklaren Blob, die Kette teilweise entfernt)
+// - trotz expliziter "Größe/Design NICHT verändern"-Anweisung. Gleiches Verhaltensmuster wie beim
+// klassischen Weg den ganzen Rest der Session: gpt-image-1.5 bevorzugt ein plausibel aussehendes
+// Ergebnis gegenüber exakter Bildtreue, sobald die Vorlage für das Modell schwer lesbar ist. Bleibt
+// als Funktion erhalten (exportiert, damit kein Lint-Fehler) für den Fall, dass später ein
+// zuverlässigerer Ansatz gefunden wird (z.B. rein mathematischer Schlagschatten statt KI) - aktuell
+// liefert compositeJewelryVariant() den rohen Composite direkt aus.
+export async function harmonizeComposite(
   compositeBuffer: Buffer,
   apiKey: string,
 ): Promise<{ buffer: Buffer; usage: unknown }> {
@@ -231,20 +266,17 @@ async function harmonizeComposite(
   return { buffer: Buffer.from(b64, "base64"), usage: response.usage };
 }
 
-// Pendant zu generateProductImageVariant() (image-generation.ts) - gleicher Rückgabewert
-// ({buffer, prompt}), damit beide Wege austauschbar von image-actions.ts aufgerufen werden können.
-// "prompt" enthält hier nur den Harmonisierungs-Prompt (zu Audit-/Anzeige-Zwecken) - es gibt keinen
-// eigentlichen Bild-Generierungs-Prompt, die Platzierung ist reine Mathematik.
-//
+// Pendant zu generateProductImageVariant() (image-generation.ts) - gleiche Signatur/gleicher
+// Rückgabewert ({buffer, prompt}), damit beide Wege austauschbar von image-actions.ts aufgerufen
+// werden können. variantIndex wird aktuell nicht verwendet (kein recordApiUsage mehr, siehe oben)
+// - bewusst trotzdem Teil der Signatur, für Interface-Parität und falls Kosten-Tracking hier später
+// wieder gebraucht wird (z.B. bei einem zuverlässigeren Politur-Schritt).
 export async function compositeJewelryVariant(
   product: SourceProductRow,
   model: MarinellModel,
   poseVariant: PoseVariant,
   variantIndex: number,
 ): Promise<{ buffer: Buffer; prompt: string }> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OPENAI_API_KEY ist nicht gesetzt (.env.local prüfen).");
-
   const calibration = findCalibration(model.key, poseVariant.key, product.hauptkategorie);
   if (!calibration) {
     throw new Error(
@@ -268,20 +300,12 @@ export async function compositeJewelryVariant(
 
   const motifCrop = await resolveMotifCrop(product, productBuffer);
   const rawComposite = await compositeRaw(baseBuffer, productBuffer, motifMm, motifCrop, calibration);
-  const { buffer: harmonized, usage } = await harmonizeComposite(rawComposite, apiKey);
 
-  await recordApiUsage({
-    provider: "openai",
-    purpose: "image_generation",
-    sourceProductId: product.id,
-    variantIndex,
-    model: OPENAI_IMAGE_MODEL,
-    usage,
-    costUsd: estimateOpenAiImageCost(OPENAI_IMAGE_MODEL, usage as Parameters<typeof estimateOpenAiImageCost>[1]),
-  });
-
+  // Kein KI-Aufruf (mehr) in diesem Pfad - siehe Kommentar bei harmonizeComposite() oben. Damit
+  // auch keine Kosten zu verbuchen: der Compositing-Weg ist aktuell komplett kostenlos (reine
+  // Bildmathematik), im Gegensatz zum klassischen Weg.
   return {
-    buffer: harmonized,
-    prompt: `[Compositing-Weg: mathematisch platziert, dann KI-Lichtanpassung] ${model.name} - ${poseVariant.label}`,
+    buffer: rawComposite,
+    prompt: `[Compositing-Weg: mathematisch exakt platziert, keine KI-Nachbearbeitung] ${model.name} - ${poseVariant.label}`,
   };
 }
