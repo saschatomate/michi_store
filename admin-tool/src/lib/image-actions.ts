@@ -6,11 +6,16 @@ import { db } from "@/db/client";
 import { sourceProducts, productGeneratedImages } from "@/db/schema";
 import { requireAuth } from "@/lib/dal";
 import { generateProductImageVariant } from "@/lib/image-generation";
+import { compositeJewelryVariant } from "@/lib/image-compositing";
 import { signGeneratedImage } from "@/lib/c2pa-sign";
 import { uploadGeneratedImage, deleteGeneratedImage } from "@/lib/image-storage";
 import { assignModel, MARINELL_MODELS, POSE_VARIANTS, type MarinellModel, type PoseVariant } from "@/lib/image-facts";
 
 type SourceProductRow = typeof sourceProducts.$inferSelect;
+
+// Zwei unabhängige Generierungswege, wählbar im ModelPickerModal (siehe hasCompositingSupport()
+// für wann "compositing" überhaupt angeboten wird). "classic" bleibt der Standard.
+export type GenerationMethod = "classic" | "compositing";
 
 // Löst das zugewiesene Model auf und persistiert es beim allerersten Aufruf für dieses Produkt
 // dauerhaft (sourceProducts.assignedModelKey), damit spätere Neu-Generierungen garantiert dasselbe
@@ -29,6 +34,7 @@ async function generateAndSaveVariant(
   model: MarinellModel,
   poseVariant: PoseVariant,
   variantIndex: number,
+  method: GenerationMethod,
 ): Promise<void> {
   const existing = await db.query.productGeneratedImages.findFirst({
     where: and(
@@ -40,10 +46,14 @@ async function generateAndSaveVariant(
   // nicht versehentlich überschrieben wird.
   if (existing?.status === "approved") return;
 
-  const label = `${model.name} – ${poseVariant.label}`;
+  const methodLabel = method === "compositing" ? " (Compositing)" : "";
+  const label = `${model.name} – ${poseVariant.label}${methodLabel}`;
 
   try {
-    const { buffer, prompt } = await generateProductImageVariant(product, model, poseVariant, variantIndex);
+    const { buffer, prompt } =
+      method === "compositing"
+        ? await compositeJewelryVariant(product, model, poseVariant, variantIndex)
+        : await generateProductImageVariant(product, model, poseVariant, variantIndex);
     const signed = await signGeneratedImage(buffer, prompt);
     const path = `generated/${product.id}/${variantIndex}-${Date.now()}.png`;
     const { url } = await uploadGeneratedImage(signed, path);
@@ -99,17 +109,26 @@ async function generateAndSaveVariant(
   }
 }
 
-async function runAllVariants(product: SourceProductRow, model: MarinellModel): Promise<void> {
+async function runAllVariants(
+  product: SourceProductRow,
+  model: MarinellModel,
+  method: GenerationMethod,
+): Promise<void> {
   await Promise.all(
-    POSE_VARIANTS.map((poseVariant, i) => generateAndSaveVariant(product, model, poseVariant, i)),
+    POSE_VARIANTS.map((poseVariant, i) => generateAndSaveVariant(product, model, poseVariant, i, method)),
   );
 }
 
 // Wird sowohl für die Erstgenerierung als auch für "Neu generieren" verwendet - die Logik ist
 // identisch (ersetzt nur nicht-freigegebene Varianten), nur das Button-Label unterscheidet sich.
 // modelKey kommt immer aus der manuellen Modellauswahl (ModelPickerModal) und überschreibt/setzt
-// die dauerhafte Zuweisung - der Nutzer kann das Model pro Produkt bewusst wechseln.
-export async function generateProductImages(id: number, modelKey: MarinellModel["key"]): Promise<void> {
+// die dauerhafte Zuweisung - der Nutzer kann das Model pro Produkt bewusst wechseln. method
+// default "classic", damit bestehende Aufrufer (falls vorhanden) unverändert funktionieren.
+export async function generateProductImages(
+  id: number,
+  modelKey: MarinellModel["key"],
+  method: GenerationMethod = "classic",
+): Promise<void> {
   await requireAuth();
   const product = await db.query.sourceProducts.findFirst({ where: eq(sourceProducts.id, id) });
   if (!product) throw new Error("Artikel nicht gefunden.");
@@ -117,7 +136,7 @@ export async function generateProductImages(id: number, modelKey: MarinellModel[
   await db.update(sourceProducts).set({ assignedModelKey: modelKey }).where(eq(sourceProducts.id, id));
   product.assignedModelKey = modelKey;
 
-  await runAllVariants(product, MARINELL_MODELS[modelKey]);
+  await runAllVariants(product, MARINELL_MODELS[modelKey], method);
 
   revalidatePath(`/products/${id}`);
   // "layout" zusätzlich, damit das Budget-Widget in der Sidebar die eben entstandenen Kosten
@@ -142,7 +161,9 @@ export async function updateImagePromptOverride(id: number, prompt: string): Pro
   if (!product) throw new Error("Artikel nicht gefunden.");
 
   const model = await resolveAndPersistModel(product);
-  await runAllVariants(product, model);
+  // Prompt-Override ist ein reines Textkonzept des klassischen Wegs - beim Compositing-Weg gibt es
+  // keinen editierbaren Bild-Prompt (die Platzierung ist Mathematik), daher hier fest "classic".
+  await runAllVariants(product, model, "classic");
 
   revalidatePath(`/products/${id}`);
   revalidatePath("/", "layout");
@@ -214,7 +235,11 @@ export async function regenerateProductImageVariant(imageId: number): Promise<vo
 
   const model = await resolveAndPersistModel(product);
   const poseVariant = POSE_VARIANTS[row.variantIndex] ?? POSE_VARIANTS[0];
-  await generateAndSaveVariant(product, model, poseVariant, row.variantIndex);
+  // Kein eigenes DB-Feld für die zuletzt genutzte Methode - das "(Compositing)"-Suffix im
+  // gespeicherten Label (siehe generateAndSaveVariant) reicht als Signal, damit "Neu" für diesen
+  // einen Slot dieselbe Methode wiederverwendet statt stillschweigend auf "classic" zu wechseln.
+  const method: GenerationMethod = row.handPreset?.includes("(Compositing)") ? "compositing" : "classic";
+  await generateAndSaveVariant(product, model, poseVariant, row.variantIndex, method);
 
   revalidatePath(`/products/${row.sourceProductId}`);
   revalidatePath("/", "layout");

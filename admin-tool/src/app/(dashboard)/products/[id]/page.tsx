@@ -13,6 +13,7 @@ import { isNewArrival } from "@/lib/product-query";
 import { cardClass } from "@/lib/ui";
 import { diamondSlots, coloredStoneSlots } from "@/lib/product-facts";
 import { defaultImageBasePrompt, resolveModel } from "@/lib/image-generation";
+import { hasCompositingSupport } from "@/lib/image-compositing";
 import { MARINELL_MODELS, type ModelKey } from "@/lib/image-facts";
 import { getLatestCostsForProduct } from "@/lib/cost-tracking";
 
@@ -258,6 +259,9 @@ export default async function ProductDetailPage({
         models={Object.values(MARINELL_MODELS)}
         recommendedModelKey={resolveModel(product).key}
         currentModelKey={product.assignedModelKey as ModelKey | null}
+        compositingSupportedModelKeys={Object.keys(MARINELL_MODELS).filter((key) =>
+          hasCompositingSupport(key, product.hauptkategorie),
+        )}
       />
     </div>
   );

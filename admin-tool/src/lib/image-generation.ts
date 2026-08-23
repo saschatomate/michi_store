@@ -100,21 +100,21 @@ function systemInstructionsFor(gender: ModelGender): string {
   return SYSTEM_INSTRUCTIONS_BEFORE_CLOTHING + CLOTHING_BY_GENDER[gender] + SYSTEM_INSTRUCTIONS_AFTER_CLOTHING;
 }
 
-function referenceImageUrl(product: SourceProductRow): string | null {
+export function referenceImageUrl(product: SourceProductRow): string | null {
   if (product.freistellerUrl) return product.freistellerUrl;
   if (product.modelbildUrl) return product.modelbildUrl;
   if (product.bildUrls && product.bildUrls.length > 0) return product.bildUrls[0];
   return null;
 }
 
-function guessMimeType(url: string): string {
+export function guessMimeType(url: string): string {
   const lower = url.toLowerCase();
   if (lower.endsWith(".png")) return "image/png";
   if (lower.endsWith(".webp")) return "image/webp";
   return "image/jpeg";
 }
 
-async function fetchImageBuffer(url: string): Promise<Buffer> {
+export async function fetchImageBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Referenzbild konnte nicht geladen werden (${response.status}): ${url}`);
@@ -200,7 +200,7 @@ function everydayObjectComparison(mm: number): string {
 // Ketten-/Umfangslänge. Durchmesser wird nur als Fallback genutzt und bei Armreifen/Armbändern
 // bewusst ausgeschlossen, weil er dort die Handgelenks-Passform meint (immer groß) statt der
 // sichtbaren Motivgröße - ein Alltagsobjekt-Vergleich wäre dort irreführend.
-function motifSizeMm(product: SourceProductRow): number | null {
+export function motifSizeMm(product: SourceProductRow): number | null {
   const faceDims = [product.breite, product.hoehe].filter(
     (v): v is number => v !== null && v > 0,
   );

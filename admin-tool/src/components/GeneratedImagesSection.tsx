@@ -10,6 +10,7 @@ import {
   deleteProductImageVariant,
   regenerateProductImageVariant,
   updateImagePromptOverride,
+  type GenerationMethod,
 } from "@/lib/image-actions";
 import { buttonPrimary, buttonSecondary, buttonGhost, cardClass, inputClass } from "@/lib/ui";
 import { Lightbox } from "@/components/Lightbox";
@@ -48,13 +49,15 @@ function ModelPickerModal({
   models,
   recommendedModelKey,
   currentModelKey,
+  compositingSupportedModelKeys,
   onConfirm,
   onClose,
 }: {
   models: ModelOption[];
   recommendedModelKey: ModelKey;
   currentModelKey: ModelKey | null;
-  onConfirm: (modelKey: ModelKey) => void;
+  compositingSupportedModelKeys: string[];
+  onConfirm: (modelKey: ModelKey, method: GenerationMethod) => void;
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState(currentModelKey ?? recommendedModelKey);
@@ -63,6 +66,8 @@ function ModelPickerModal({
   const initialModel = models.find((m) => m.key === (currentModelKey ?? recommendedModelKey));
   const [genderFilter, setGenderFilter] = useState<ModelGender>(initialModel?.gender ?? "weiblich");
   const visibleModels = models.filter((m) => m.gender === genderFilter);
+  const [method, setMethod] = useState<GenerationMethod>("classic");
+  const compositingAvailable = compositingSupportedModelKeys.includes(selected);
 
   function selectGender(gender: ModelGender) {
     setGenderFilter(gender);
@@ -70,8 +75,15 @@ function ModelPickerModal({
     if (!stillVisible) {
       const recommended = models.find((m) => m.key === recommendedModelKey && m.gender === gender);
       const fallback = models.find((m) => m.gender === gender);
-      setSelected((recommended ?? fallback)?.key ?? selected);
+      const nextKey = (recommended ?? fallback)?.key ?? selected;
+      setSelected(nextKey);
+      if (!compositingSupportedModelKeys.includes(nextKey)) setMethod("classic");
     }
+  }
+
+  function selectModel(key: ModelKey) {
+    setSelected(key);
+    if (!compositingSupportedModelKeys.includes(key)) setMethod("classic");
   }
 
   return (
@@ -128,7 +140,7 @@ function ModelPickerModal({
               <button
                 key={model.key}
                 type="button"
-                onClick={() => setSelected(model.key)}
+                onClick={() => selectModel(model.key)}
                 className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
                   isSelected
                     ? "border-indigo-500 bg-indigo-50/60 ring-1 ring-indigo-200"
@@ -158,14 +170,57 @@ function ModelPickerModal({
           })}
         </div>
 
-        <div className="mt-5 flex items-center justify-end gap-2 border-t border-zinc-100 pt-4">
-          <button onClick={onClose} className={buttonSecondary}>
-            Abbrechen
-          </button>
-          <button onClick={() => onConfirm(selected)} className={buttonPrimary}>
-            <RefreshCw size={14} />
-            Bilder generieren
-          </button>
+        <div className="mt-5 border-t border-zinc-100 pt-4">
+          <span className="mb-1.5 block text-xs font-medium text-zinc-700">Generierungsweg</span>
+          <div className="mb-4 flex flex-col gap-1.5 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => setMethod("classic")}
+              className={`flex-1 rounded-lg border p-2.5 text-left text-xs transition-colors ${
+                method === "classic"
+                  ? "border-indigo-500 bg-indigo-50/60 ring-1 ring-indigo-200"
+                  : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50"
+              }`}
+            >
+              <span className="block font-semibold text-zinc-900">Klassisch (KI)</span>
+              <span className="block text-zinc-500">
+                Ein KI-Generierungsschritt. Bewährt, Größe kann bei sehr kleinen Stücken leicht
+                übertrieben wirken.
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => compositingAvailable && setMethod("compositing")}
+              disabled={!compositingAvailable}
+              title={
+                compositingAvailable
+                  ? undefined
+                  : "Noch kein kalibriertes Basis-Foto für dieses Model + diese Kategorie"
+              }
+              className={`flex-1 rounded-lg border p-2.5 text-left text-xs transition-colors ${
+                !compositingAvailable
+                  ? "cursor-not-allowed border-zinc-100 bg-zinc-50 opacity-50"
+                  : method === "compositing"
+                    ? "border-indigo-500 bg-indigo-50/60 ring-1 ring-indigo-200"
+                    : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50"
+              }`}
+            >
+              <span className="block font-semibold text-zinc-900">Compositing (Beta)</span>
+              <span className="block text-zinc-500">
+                Mathematisch exakte Größe (kein KI-Ratespiel), dann nur ein KI-Politur-Schritt für
+                Licht/Schatten. {!compositingAvailable && "Für dieses Model/Kategorie noch nicht verfügbar."}
+              </span>
+            </button>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button onClick={onClose} className={buttonSecondary}>
+              Abbrechen
+            </button>
+            <button onClick={() => onConfirm(selected, method)} className={buttonPrimary}>
+              <RefreshCw size={14} />
+              Bilder generieren
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -286,6 +341,7 @@ export function GeneratedImagesSection({
   models,
   recommendedModelKey,
   currentModelKey,
+  compositingSupportedModelKeys,
 }: {
   id: number;
   images: GeneratedImageItem[];
@@ -294,6 +350,7 @@ export function GeneratedImagesSection({
   models: ModelOption[];
   recommendedModelKey: ModelKey;
   currentModelKey: ModelKey | null;
+  compositingSupportedModelKeys: string[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [isEditingPrompt, setIsEditingPrompt] = useState(false);
@@ -324,9 +381,9 @@ export function GeneratedImagesSection({
     });
   }
 
-  function confirmModelAndGenerate(modelKey: ModelKey) {
+  function confirmModelAndGenerate(modelKey: ModelKey, method: GenerationMethod) {
     setPickerOpen(false);
-    startTransition(() => generateProductImages(id, modelKey));
+    startTransition(() => generateProductImages(id, modelKey, method));
   }
 
   return (
@@ -420,6 +477,7 @@ export function GeneratedImagesSection({
           models={models}
           recommendedModelKey={recommendedModelKey}
           currentModelKey={currentModelKey}
+          compositingSupportedModelKeys={compositingSupportedModelKeys}
           onClose={() => setPickerOpen(false)}
           onConfirm={confirmModelAndGenerate}
         />
