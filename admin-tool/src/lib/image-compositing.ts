@@ -589,6 +589,122 @@ async function resolveOhrschmuckCrop(productBuffer: Buffer): Promise<MotifCropOv
   return cutOff ? null : detected;
 }
 
+// Fund 2026-08-23 (Nutzer-Report zu 4P765G8, ein Collier mit zwei parallelen Pavé-Strängen, die
+// in zwei Tropfen-Diamant-Clustern enden): detectMotifBoundingBox() erfasst bei einem NORMALEN
+// Collier-Freisteller (echte Transparenz, KEIN deckender Studio-Hintergrund wie bei 4R267R8) die
+// GESAMTE sichtbare Kette+Anhänger-Spanne als "das Motiv" - bei 4P765G8 waren das 87% der
+// Bildhöhe. compositeRaw() skaliert diese komplette Box (Kette inklusive) auf motifSizeMm() (die
+// reale Anhänger-Höhe aus den Produktdaten, hier 22,1mm) - der eigentliche Anhänger, nur ein
+// Bruchteil dieser Box, landet dadurch bei etwa 5-6mm: winzig und auf dem Modelfoto kaum als
+// Design erkennbar, genau das vom Nutzer gemeldete "Schmuckstück passt überhaupt nicht". Der
+// einzige bisher end-to-end getestete Collier-Artikel (4R267R8) hat dieses Problem NIE gezeigt,
+// aber nur zufällig: sein Freisteller hat einen deckenden Hintergrund, wodurch trim() kaum
+// greift und detectMotifBoundingBox() null zurückgibt - das zwingt zum manuellen Override in
+// PRODUCT_MOTIF_OVERRIDES, der zufällig nur den Anhänger selbst erfasst. Jeder ANDERE Collier mit
+// echter Transparenz (vermutlich die meisten) war dadurch nie wirklich getestet und lief still in
+// denselben Fehler.
+//
+// Fix: die Kette algorithmisch VOM Anhänger trennen, statt für jedes betroffene Produkt einen
+// manuellen Crop zu pflegen (das skaliert nicht). Kernidee: eine reine Kettenzeile hat trotz ggf.
+// großer Spannweite (zwei auseinanderlaufende Stränge) nur wenig tatsächlich deckendes Material
+// (dünner Draht) - die Anzahl deckender Pixel pro Bildzeile bleibt niedrig und über viele Zeilen
+// hinweg erstaunlich konstant. Sobald der Anhänger beginnt (Fassung, Pavé, Cluster, ein breiter
+// massiver Bügel wie bei 4Q874W8, ...), springt diese Zeilen-Pixelzahl deutlich nach oben. Die
+// erste Zeile, ab der das für mehrere Zeilen in Folge anhält, markiert die Grenze Kette→Anhänger.
+//
+// Kalibriert und gegengeprüft an 7 echten Colliers unterschiedlichster Bauart (4P765G8, 4R267R8-
+// Stil sowie 6 zufällige Stichproben: Solitär+Öse, Halo mit breitem massivem Bügel, Oval-Rahmen
+// mit Blütenzweig, Schmetterling mit ZWEI Kettenansätzen direkt an den Flügeln statt einer Öse,
+// Perle, Blüten-Cluster) - der erkannte Ausschnitt wurde jeweils gegen das Seitenverhältnis aus
+// den Produktdaten (Höhe/Breite in mm) geprüft, Abweichung durchgehend unter 10%. Ein einziger
+// Ausreißer während der Kalibrierung (4Q874W8, -50%): der Bügel dort ist breit/massiv (hohe
+// Zeilen-Pixelzahl), gefolgt von einem SCHMALEN, kurzen Verbindungssteg zur Fassung (fast so
+// dünn wie reine Kette) - ein zu strenges "Zeilen müssen 15 in Folge über dem Schwellwert bleiben"
+// hat dadurch fälschlich erst am Cluster ausgelöst statt am Bügel. Behoben durch WINDOW=10 statt
+// 15 und einen niedrigeren Multiplikator (2.0 statt 2.5) - beides zusammen erkennt den Bügel
+// zuverlässig, ohne bei den anderen 6 Produkten neue Fehlklassifikationen zu erzeugen.
+async function resolveColliersPendantCrop(productBuffer: Buffer): Promise<MotifCropOverride | null> {
+  const sharp = await loadSharp();
+  const ALPHA_THRESHOLD = 30;
+  const { data, info } = await sharp(productBuffer)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const { width, height, channels } = info;
+  if (!width || !height) return null;
+
+  const rowOpaqueCount = new Array(height).fill(0);
+  const rowLeft = new Array(height).fill(-1);
+  const rowRight = new Array(height).fill(-1);
+  for (let y = 0; y < height; y++) {
+    let count = 0;
+    let left = -1;
+    let right = -1;
+    const rowOffset = y * width * channels;
+    for (let x = 0; x < width; x++) {
+      const alpha = data[rowOffset + x * channels + 3];
+      if (alpha > ALPHA_THRESHOLD) {
+        count++;
+        if (left === -1) left = x;
+        right = x;
+      }
+    }
+    rowOpaqueCount[y] = count;
+    rowLeft[y] = left;
+    rowRight[y] = right;
+  }
+
+  // Baseline für "reine Kette" = 20. Perzentil aller Zeilen mit Material - robust gegen einzelne
+  // breite Ausreißer (z.B. eine Öse ganz oben), weil bei einem hängenden Anhänger die deutliche
+  // Mehrheit der Zeilen echte Kette ist.
+  const nonZeroCounts = [...rowOpaqueCount].filter((c) => c > 0).sort((a, b) => a - b);
+  if (nonZeroCounts.length === 0) return null;
+  const chainBaseline = nonZeroCounts[Math.floor(nonZeroCounts.length * 0.2)];
+  const threshold = chainBaseline * 2.0;
+
+  const WINDOW = 10;
+  let transitionY = -1;
+  for (let y = 0; y <= height - WINDOW; y++) {
+    let allAboveThreshold = true;
+    for (let w = 0; w < WINDOW; w++) {
+      if (rowOpaqueCount[y + w] <= threshold) {
+        allAboveThreshold = false;
+        break;
+      }
+    }
+    if (allAboveThreshold) {
+      transitionY = y;
+      break;
+    }
+  }
+  if (transitionY === -1) return null;
+
+  const firstOpaqueY = rowOpaqueCount.findIndex((c) => c > 0);
+  const lastOpaqueY = height - 1 - [...rowOpaqueCount].reverse().findIndex((c) => c > 0);
+  // Sicherheitscheck (analog zu detectMotifBoundingBox()/resolveOhrschmuckCrop()): bleibt vom
+  // gefundenen Übergang bis zum unteren Bildrand nur ein winziger Rest der gesamten Motiv-Höhe
+  // übrig, ist das vermutlich eine Fehlerkennung (z.B. ein zufälliger Ausreißer statt der echten
+  // Anhänger-Grenze) - dann lieber null zurückgeben und auf die normale Ganzbild-Erkennung
+  // zurückfallen statt einen sinnlos schmalen Ausschnitt zu montieren.
+  const totalMotifHeight = lastOpaqueY - firstOpaqueY;
+  if (lastOpaqueY - transitionY < totalMotifHeight * 0.05) return null;
+
+  let cropLeft = Infinity;
+  let cropRight = -Infinity;
+  for (let y = transitionY; y <= lastOpaqueY; y++) {
+    if (rowLeft[y] !== -1 && rowLeft[y] < cropLeft) cropLeft = rowLeft[y];
+    if (rowRight[y] !== -1 && rowRight[y] > cropRight) cropRight = rowRight[y];
+  }
+  if (!Number.isFinite(cropLeft) || !Number.isFinite(cropRight)) return null;
+
+  return {
+    left: cropLeft,
+    top: transitionY,
+    width: cropRight - cropLeft,
+    height: lastOpaqueY - transitionY,
+  };
+}
+
 async function resolvePendantCrop(
   product: SourceProductRow,
   productBuffer: Buffer,
@@ -598,6 +714,10 @@ async function resolvePendantCrop(
   if (product.hauptkategorie === "Ohrschmuck") {
     const ohrschmuckCrop = await resolveOhrschmuckCrop(productBuffer);
     if (ohrschmuckCrop) return ohrschmuckCrop;
+  }
+  if (product.hauptkategorie === "Colliers" || product.hauptkategorie === "Anhänger") {
+    const colliersCrop = await resolveColliersPendantCrop(productBuffer);
+    if (colliersCrop) return colliersCrop;
   }
   const detected = await detectMotifBoundingBox(productBuffer);
   if (detected) return detected;
