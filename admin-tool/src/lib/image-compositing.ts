@@ -41,16 +41,25 @@ async function loadSharp() {
 // dieser Pfad komplett kostenlos (keine OpenAI-Aufrufe mehr), bis ein zuverlässigerer
 // Politur-Ansatz gefunden ist.
 //
+// Zweite Iteration (ebenfalls 2026-08-23): den kompletten Ketten+Anhänger-Ausschnitt bei gedrehten
+// Posen einfach starr zu rotieren war physikalisch falsch - ein echter Anhänger hängt durch die
+// Schwerkraft relativ aufrecht, unabhängig vom Kopfwinkel, nur die Kette folgt dem Hals. Deshalb
+// jetzt: der Anhänger wird UNROTIERT aus dem Produktfoto eingesetzt (wie eh schon), die Kette wird
+// NICHT mehr aus dem Foto kopiert, sondern als eigene, zur jeweiligen Pose passende Kurve
+// GEZEICHNET (siehe drawChain()) - Farbe wird aus dem Produktfoto abgetastet, nicht geraten.
+//
 // Deutliche Einschränkung, Stand jetzt: nur EINE Model/Pose/Kategorie-Kombination ist kalibriert
 // (Sophia, Frontal, Colliers/Anhänger). Für alle anderen Kombinationen wirft
 // compositeJewelryVariant() einen Fehler - der Aufrufer muss auf den klassischen Weg zurückfallen
 // oder die Option in der UI deaktivieren (siehe hasCompositingSupport()). Jede weitere Kombination
 // braucht ein eigenes, einmalig generiertes und kalibriertes Basis-Foto (siehe PoseCalibration).
 
+export type ChainAnchor = { xPercent: number; yPercent: number };
+
 export type PoseCalibration = {
   /** Festes, wiederverwendetes Foto des Models in dieser Pose, OHNE jeglichen Schmuck. */
   baseImageUrl: string;
-  /** Ankerpunkt (Mittelpunkt der Platzierung) als Prozent der Bildbreite/-höhe. */
+  /** Ankerpunkt (Mittelpunkt der Anhänger-Platzierung) als Prozent der Bildbreite/-höhe. */
   anchorXPercent: number;
   anchorYPercent: number;
   /**
@@ -61,15 +70,23 @@ export type PoseCalibration = {
    */
   pxPerMm: number;
   /**
-   * Rotation in Grad (sharp-Konvention, positiv = im Uhrzeigersinn), mit der der eingefügte
-   * Ausschnitt gedreht wird, bevor er auf den Ankerpunkt gesetzt wird - Zwischenschritt, um die
-   * Kette grob an den Hals-/Schulterwinkel dieser Pose anzupassen. Bewusst nur eine grobe erste
-   * Schätzung (Fund 2026-08-23: die Kette lag ohne jede Drehung sichtbar "drüber" statt "dran"
-   * bei Dreiviertelprofil/Seitlich). Physikalisch nicht ganz korrekt, weil dabei auch der Anhänger
-   * mitgedreht wird, obwohl ein echter Anhänger durch die Schwerkraft eher aufrecht hängen bleibt,
-   * unabhängig vom Kopfwinkel - siehe Kommentar bei compositeRaw(). Fehlt/0 = keine Drehung.
+   * Nur für Kategorien mit Kette (Colliers/Anhänger), optional: zwei Punkte auf DIESEM Basisfoto,
+   * an denen die Kette links/rechts vom Hals kommend sichtbar wird (z.B. wo sie unter dem Haar
+   * hervorkommt). Wenn gesetzt (zusammen mit ProductMotifCrops.chainColorSample), zeichnet
+   * compositeRaw() eine Kette zwischen diesen Punkten und dem oberen Rand des eingesetzten
+   * Anhängers - jede Pose bekommt so eine zur jeweiligen Kopf-/Halsdrehung passende Kette, statt
+   * einer starren Kopie aus dem (immer aus EINEM Winkel fotografierten) Original. Fehlt einer der
+   * beiden Punkte, wird gar keine Kette gezeichnet (nur der Anhänger) statt zu raten.
    */
-  rotationDeg?: number;
+  chainLeftAnchor?: ChainAnchor;
+  chainRightAnchor?: ChainAnchor;
+  /**
+   * Kettenlänge (cm, entspricht sourceProducts.produktLaengeCm) des Produkts, mit dem
+   * anchorYPercent kalibriert wurde - Referenzwert für die längenabhängige Höhenkorrektur, siehe
+   * adjustAnchorYForChainLength(). Ohne diesen Wert (oder ohne produktLaengeCm am Produkt) bleibt
+   * anchorYPercent unverändert für jedes Produkt gleich.
+   */
+  referenceChainLengthCm?: number;
 };
 
 // Schlüssel: `${modelKey}:${poseKey}:${kategorieBucket}`. Colliers/Anhänger und Armbänder/
@@ -81,6 +98,9 @@ export type PoseCalibration = {
 // Neumessung dort würde das Motiv fälschlich verkleinern. Kopf-/Bildausschnittgröße ist in allen 3
 // Fotos (gleicher Prompt-Rahmen) sichtbar konsistent, daher ist die Wiederverwendung die
 // verlässlichere Annahme.
+//
+// chainLeftAnchor/chainRightAnchor sind erste Schätzungen (per Augenmaß aus den Basisfotos
+// abgelesen, nicht exakt ausgemessen) - nach Sichtprüfung ggf. nachjustieren.
 export const POSE_CALIBRATIONS: Record<string, PoseCalibration> = {
   "sophia:frontal:Colliers": {
     baseImageUrl:
@@ -88,6 +108,9 @@ export const POSE_CALIBRATIONS: Record<string, PoseCalibration> = {
     anchorXPercent: 50,
     anchorYPercent: 64,
     pxPerMm: 2.76,
+    chainLeftAnchor: { xPercent: 33, yPercent: 52 },
+    chainRightAnchor: { xPercent: 67, yPercent: 52 },
+    referenceChainLengthCm: 45.7,
   },
   "sophia:dreiviertelprofil:Colliers": {
     baseImageUrl:
@@ -95,10 +118,9 @@ export const POSE_CALIBRATIONS: Record<string, PoseCalibration> = {
     anchorXPercent: 52,
     anchorYPercent: 63,
     pxPerMm: 2.76,
-    // Erste grobe Schätzung (nicht ausgemessen) - Zwischenschritt auf Nutzerwunsch, um zu sehen,
-    // ob Richtung/Größenordnung überhaupt stimmt, bevor die aufwändigere Lösung (Kette separat
-    // prozedural zeichnen statt drehen) gebaut wird. Nach Sichtprüfung anpassen/Vorzeichen drehen.
-    rotationDeg: -8,
+    chainLeftAnchor: { xPercent: 36, yPercent: 50 },
+    chainRightAnchor: { xPercent: 70, yPercent: 52 },
+    referenceChainLengthCm: 45.7,
   },
   "sophia:seitlich:Colliers": {
     baseImageUrl:
@@ -106,8 +128,9 @@ export const POSE_CALIBRATIONS: Record<string, PoseCalibration> = {
     anchorXPercent: 48,
     anchorYPercent: 62,
     pxPerMm: 2.76,
-    // Ebenfalls erste grobe Schätzung, siehe Kommentar oben bei dreiviertelprofil.
-    rotationDeg: 12,
+    chainLeftAnchor: { xPercent: 30, yPercent: 48 },
+    chainRightAnchor: { xPercent: 66, yPercent: 50 },
+    referenceChainLengthCm: 45.7,
   },
 };
 
@@ -151,7 +174,7 @@ export function hasCompositingSupport(
 // innerhalb der Canvas, nur der äußerste Rand ist transparent (bei Produkt 4R267R8 beobachtet) -
 // dort verkleinert trim() das Bild kaum, und das Ergebnis wäre falsch (Hintergrund statt Motiv).
 // Schrumpft die Bounding Box um weniger als 10% in eine Richtung, geben wir bewusst null zurück,
-// statt ein falsches Ergebnis zu riskieren - der Aufrufer muss dann motifCropOverride nutzen.
+// statt ein falsches Ergebnis zu riskieren - der Aufrufer muss dann einen manuellen Crop hinterlegen.
 export async function detectMotifBoundingBox(
   buffer: Buffer,
 ): Promise<{ left: number; top: number; width: number; height: number } | null> {
@@ -171,32 +194,31 @@ export async function detectMotifBoundingBox(
 
 export type MotifCropOverride = { left: number; top: number; width: number; height: number };
 
-// Zwei getrennte Ausschnitte, NICHT derselbe (das war der eigentliche Bug vom 2026-08-23):
-// - extractionCrop: was tatsächlich ausgeschnitten, skaliert und eingefügt wird (bei 4R267R8 der
-//   BREITE Ausschnitt inkl. Kette).
-// - scaleReferenceCrop: welcher TEIL davon dem bekannten Realmaß (motifMm) entspricht (bei
-//   4R267R8 NUR der Cluster, ohne Kette). Nur dieser Teil darf für die Umrechnung mm→Pixel
-//   herangezogen werden - wird stattdessen (wie im ersten Fix-Versuch fälschlich) die Größe des
-//   GESAMTEN extractionCrop als "das sind motifMm" behandelt, kommt ein viel zu kleiner Maßstab
-//   heraus (die Kette spannt real deutlich mehr als motifMm auf), und die dünne Kette verschwindet
-//   beim Verkleinern komplett - genau das hat der Nutzer bemerkt.
-// Wenn beide identisch sind (Normalfall bei echten transparenten Cutouts ohne Kettenanteil im
-// Crop), macht das keinen Unterschied.
 export type ProductMotifCrops = {
-  extractionCrop: MotifCropOverride;
-  scaleReferenceCrop: MotifCropOverride;
+  /** NUR der Anhänger/das Cluster selbst (ohne Kette) - wird unverändert/aufrecht eingesetzt. */
+  pendantCrop: MotifCropOverride;
+  /**
+   * Kleiner Bereich im Produktfoto, der sicher auf der Kette liegt (nicht auf einem Stein, nicht
+   * auf dem Hintergrund) - wird für die Kettenfarbe abgetastet (Durchschnittsfarbe des Bereichs).
+   * Nur nötig, wenn die Pose-Kalibrierung chainLeftAnchor/chainRightAnchor gesetzt hat.
+   */
+  chainColorSample?: MotifCropOverride;
 };
 
 // Manuelle Motiv-Ausschnitte für Produkte, bei denen detectMotifBoundingBox() nicht zuverlässig
 // funktioniert (deckender Studio-Hintergrund statt echter Transparenz, siehe dort). Schlüssel:
 // modellErweitert. 4R267R8 wurde einmalig über ein Prozent-Grid-Overlay auf dem 2000x2000-Foto
-// ausgemessen (Cluster/scaleReferenceCrop ca. x:42-69%, y:55-87%; extractionCrop breiter, damit die
-// Kette mit im Bild ist). Jedes weitere Produkt mit demselben Freisteller-Stil braucht vorerst
+// ausgemessen (Cluster ca. x:42-69%, y:55-87%; Kettenfarbe-Sample nahe der Bildmitte oben, wo die
+// Kette sicher verläuft). Jedes weitere Produkt mit demselben Freisteller-Stil braucht vorerst
 // denselben manuellen Schritt, bis eine robustere automatische Erkennung existiert.
 const PRODUCT_MOTIF_OVERRIDES: Record<string, ProductMotifCrops> = {
   "4R267R8": {
-    extractionCrop: { left: 400, top: 0, width: 1200, height: 1800 },
-    scaleReferenceCrop: { left: 840, top: 1100, width: 540, height: 640 },
+    // Korrigiert (war zu schmal, hat die äußeren 2 Ovale leicht angeschnitten): x ca. 30-72%,
+    // y ca. 57-89% auf dem 2000x2000-Foto.
+    pendantCrop: { left: 600, top: 1140, width: 840, height: 640 },
+    // Korrigiert (Original-Punkt lag in der Lücke zwischen den beiden Kettensträngen, hat den
+    // hellen Hintergrund statt der Kette abgetastet) - jetzt auf einem Kettenglied links oben.
+    chainColorSample: { left: 270, top: 130, width: 60, height: 60 },
   },
 };
 
@@ -206,10 +228,8 @@ async function resolveMotifCrops(
 ): Promise<ProductMotifCrops> {
   const override = PRODUCT_MOTIF_OVERRIDES[product.modellErweitert];
   if (override) return override;
-  // Ohne manuellen Override sind extraction- und scaleReferenceCrop identisch - die automatisch
-  // erkannte Bounding Box ist dann sowohl "was wir ausschneiden" als auch "was motifMm entspricht".
   const detected = await detectMotifBoundingBox(productBuffer);
-  if (detected) return { extractionCrop: detected, scaleReferenceCrop: detected };
+  if (detected) return { pendantCrop: detected };
   throw new Error(
     `Motiv-Bereich für ${product.modellErweitert} konnte nicht automatisch erkannt werden ` +
       `(vermutlich kein echter transparenter Freisteller-Hintergrund) und ist auch nicht in ` +
@@ -228,102 +248,167 @@ async function resolveMotifCrops(
 // (>=17mm, die ohnehin gut lesbar sind) bleiben unverändert in exakter Realgröße.
 const MIN_RENDER_MM = 17;
 
-// Reine Bildmathematik (keine KI): schneidet extractionCrop aus dem Produktfoto, skaliert ihn so,
-// dass scaleReferenceCrop darin exakt motifMm (ggf. auf MIN_RENDER_MM angehoben) im Maßstab des
-// Basisfotos entspricht, und setzt ihn so ein, dass die MITTE von scaleReferenceCrop (nicht die
-// Mitte des ganzen extractionCrop, die kann bei einem breiten Ausschnitt deutlich daneben liegen)
-// exakt auf dem Ankerpunkt landet.
+// Durchschnittsfarbe eines kleinen Bildbereichs (für die Kettenfarbe - aus dem echten Produktfoto
+// abgetastet statt geraten/hart codiert, damit es bei jedem Metall/jeder Legierung passt).
+async function sampleAverageColor(
+  buffer: Buffer,
+  region: MotifCropOverride,
+): Promise<{ r: number; g: number; b: number }> {
+  const sharp = await loadSharp();
+  const { data, info } = await sharp(buffer)
+    .extract(region)
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const pixelCount = info.width * info.height;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  for (let i = 0; i < pixelCount; i++) {
+    r += data[i * info.channels];
+    g += data[i * info.channels + 1];
+    b += data[i * info.channels + 2];
+  }
+  return { r: Math.round(r / pixelCount), g: Math.round(g / pixelCount), b: Math.round(b / pixelCount) };
+}
+
+// Zeichnet die Kette als zwei weiche Kurven (quadratische Bezier, mit Durchhang) von je einem
+// chainLeftAnchor/chainRightAnchor-Punkt zum oberen Rand des Anhängers - reine Vektorgrafik (SVG),
+// keine Kopie aus dem Produktfoto, deshalb automatisch passend zu JEDER Pose. Läuft auf einer
+// Canvas in Basisfoto-Größe, damit sie direkt (ohne weitere Positionsberechnung) über das
+// Basisfoto gelegt werden kann.
+async function drawChain(
+  canvasWidth: number,
+  canvasHeight: number,
+  leftPoint: { x: number; y: number },
+  rightPoint: { x: number; y: number },
+  attachPoint: { x: number; y: number },
+  colorHex: string,
+  strokeWidthPx: number,
+): Promise<Buffer> {
+  const sharp = await loadSharp();
+  function pathFor(from: { x: number; y: number }): string {
+    // Kontrollpunkt der Bezierkurve mittig zwischen Start/Ziel, leicht nach unten versetzt (Anteil
+    // des vertikalen Abstands) - simuliert den natürlichen Durchhang einer Kette unter Schwerkraft.
+    // Faktor bewusst klein (0.08 statt ursprünglich 0.35, siehe Fund 2026-08-23): am echten
+    // Produktfoto liegt die Kette straff/fast gerade an, keine tiefe Kurve - 0.35 sah wie ein
+    // spitzes, unrealistisches "V" aus.
+    const midX = (from.x + attachPoint.x) / 2;
+    const sag = Math.max(1, Math.abs(attachPoint.y - from.y) * 0.08 + 1);
+    const midY = (from.y + attachPoint.y) / 2 + sag;
+    return `M ${from.x} ${from.y} Q ${midX} ${midY} ${attachPoint.x} ${attachPoint.y}`;
+  }
+  const svg =
+    `<svg width="${canvasWidth}" height="${canvasHeight}" xmlns="http://www.w3.org/2000/svg">` +
+    `<path d="${pathFor(leftPoint)}" stroke="${colorHex}" stroke-width="${strokeWidthPx}" fill="none" stroke-linecap="round"/>` +
+    `<path d="${pathFor(rightPoint)}" stroke="${colorHex}" stroke-width="${strokeWidthPx}" fill="none" stroke-linecap="round"/>` +
+    `</svg>`;
+  return sharp(Buffer.from(svg)).png().toBuffer();
+}
+
+// Ein Anhänger hängt an einer längeren Kette tiefer, an einer kürzeren höher - anchorYPercent ist
+// aber pro Pose auf GENAU EINE Referenzlänge kalibriert (referenceChainLengthCm, das Produkt, mit
+// dem der Ankerpunkt bestimmt wurde). Für andere Kettenlängen wird die Höhe proportional verschoben.
+// Faustregel (grobe Näherung, keine exakte Drapier-Physik): ca. die Hälfte einer zusätzlichen
+// Kettenlänge wird zu zusätzlichem Frontal-Abstand vom Hals, ein in der Schmuckbranche gängiger
+// Vereinfachungsfaktor für die Halskette-Drape (kurze Kette liegt eng am Hals mit wenig Spiel,
+// überschüssige Länge verteilt sich als Durchhang auf beide Seiten der Front-Mitte). Ohne
+// referenceChainLengthCm (Kalibrierung) oder produktLaengeCm (Produkt) bleibt anchorYPercent
+// unverändert, statt mit unvollständigen Daten zu raten.
+function adjustedAnchorYPercent(
+  calibration: PoseCalibration,
+  chainLengthCm: number | null,
+  baseH: number,
+): number {
+  if (!chainLengthCm || !calibration.referenceChainLengthCm) return calibration.anchorYPercent;
+  const dropChangeCm = (chainLengthCm - calibration.referenceChainLengthCm) * 0.5;
+  const dropChangeMm = dropChangeCm * 10;
+  const dropChangePx = dropChangeMm * calibration.pxPerMm;
+  const dropChangePercent = (dropChangePx / baseH) * 100;
+  return calibration.anchorYPercent + dropChangePercent;
+}
+
+// Reine Bildmathematik (keine KI): setzt den Anhänger (pendantCrop) unverändert/aufrecht in
+// korrekter Realgröße auf den (ggf. per Kettenlänge höhenkorrigierten) Ankerpunkt, zeichnet bei
+// Colliers/Anhänger zusätzlich eine zur Pose passende Kette (siehe drawChain()) und legt einen
+// weichen Kontaktschatten unter den Anhänger.
 export async function compositeRaw(
   baseBuffer: Buffer,
   productBuffer: Buffer,
   motifMm: number,
+  chainLengthCm: number | null,
   crops: ProductMotifCrops,
   calibration: PoseCalibration,
 ): Promise<Buffer> {
   const sharp = await loadSharp();
-  const { extractionCrop, scaleReferenceCrop } = crops;
+  const { pendantCrop, chainColorSample } = crops;
   const baseMeta = await sharp(baseBuffer).metadata();
   const baseW = baseMeta.width!;
   const baseH = baseMeta.height!;
 
-  const cropped = await sharp(productBuffer).extract(extractionCrop).png().toBuffer();
+  const cropped = await sharp(productBuffer).extract(pendantCrop).png().toBuffer();
 
-  // Skalierungsfaktor: wie viel kleiner/größer muss extractionCrop werden, damit scaleReferenceCrop
-  // darin (dieselbe Bildauflösung, also gleicher Faktor für beide) mit seiner LÄNGEREN Seite
+  // Skalierungsfaktor: wie viel kleiner/größer muss pendantCrop werden, damit seine LÄNGERE Seite
   // effectiveMm * calibration.pxPerMm Pixel misst (motifMm bezieht sich auf die größere reale
   // Abmessung, siehe motifSizeMm() in image-generation.ts; effectiveMm siehe MIN_RENDER_MM oben).
   const effectiveMm = Math.max(motifMm, MIN_RENDER_MM);
-  const referenceLongerPx = Math.max(scaleReferenceCrop.width, scaleReferenceCrop.height);
-  const targetReferenceLongerPx = effectiveMm * calibration.pxPerMm;
-  const scaleFactor = targetReferenceLongerPx / referenceLongerPx;
-  const targetW = Math.max(1, Math.round(extractionCrop.width * scaleFactor));
-  const targetH = Math.max(1, Math.round(extractionCrop.height * scaleFactor));
-  const resized = await sharp(cropped).resize(targetW, targetH).png().toBuffer();
-
-  // Wo landet die Mitte von scaleReferenceCrop innerhalb des jetzt skalierten extractionCrop?
-  const refCenterRelX = scaleReferenceCrop.left - extractionCrop.left + scaleReferenceCrop.width / 2;
-  const refCenterRelY = scaleReferenceCrop.top - extractionCrop.top + scaleReferenceCrop.height / 2;
-  let refCenterInFinalX = (refCenterRelX / extractionCrop.width) * targetW;
-  let refCenterInFinalY = (refCenterRelY / extractionCrop.height) * targetH;
-  let finalLayer = resized;
-  let finalW = targetW;
-  let finalH = targetH;
-
-  // Optionale Rotation (siehe rotationDeg-Kommentar bei PoseCalibration) - sharp dreht um die
-  // BILDMITTE und vergrößert die Canvas automatisch, damit nichts abgeschnitten wird. Damit der
-  // Ankerpunkt trotzdem exakt auf scaleReferenceCrop landet, muss dessen Position mit derselben
-  // Rotationsmatrix um die alte Bildmitte mitgedreht und dann auf die neue (größere) Canvas-Mitte
-  // bezogen werden - sonst würde die Drehung das Motiv unbemerkt vom Ankerpunkt wegschieben.
-  if (calibration.rotationDeg) {
-    const rotated = await sharp(resized)
-      .rotate(calibration.rotationDeg, { background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .png()
-      .toBuffer({ resolveWithObject: true });
-    const rad = (calibration.rotationDeg * Math.PI) / 180;
-    const dx = refCenterInFinalX - targetW / 2;
-    const dy = refCenterInFinalY - targetH / 2;
-    const dxRot = dx * Math.cos(rad) - dy * Math.sin(rad);
-    const dyRot = dx * Math.sin(rad) + dy * Math.cos(rad);
-    finalW = rotated.info.width;
-    finalH = rotated.info.height;
-    refCenterInFinalX = finalW / 2 + dxRot;
-    refCenterInFinalY = finalH / 2 + dyRot;
-    finalLayer = rotated.data;
-  }
+  const pendantLongerPx = Math.max(pendantCrop.width, pendantCrop.height);
+  const targetLongerPx = effectiveMm * calibration.pxPerMm;
+  const scaleFactor = targetLongerPx / pendantLongerPx;
+  const targetW = Math.max(1, Math.round(pendantCrop.width * scaleFactor));
+  const targetH = Math.max(1, Math.round(pendantCrop.height * scaleFactor));
+  const resizedPendant = await sharp(cropped).resize(targetW, targetH).png().toBuffer();
 
   const anchorX = Math.round((calibration.anchorXPercent / 100) * baseW);
-  const anchorY = Math.round((calibration.anchorYPercent / 100) * baseH);
-  const pasteLeft = Math.round(anchorX - refCenterInFinalX);
-  const pasteTop = Math.round(anchorY - refCenterInFinalY);
+  const anchorY = Math.round((adjustedAnchorYPercent(calibration, chainLengthCm, baseH) / 100) * baseH);
+  const pasteLeft = Math.round(anchorX - targetW / 2);
+  const pasteTop = Math.round(anchorY - targetH / 2);
 
-  // Weicher Kontaktschatten (reine Bildmathematik, keine KI): Silhouette des Motivs, geschwärzt,
-  // etwas nach unten/rechts versetzt (passend zum etablierten "warmes Licht von links oben"-Look,
-  // siehe SYSTEM_INSTRUCTIONS_BEFORE_CLOTHING in image-generation.ts) und weichgezeichnet, mit
-  // reduzierter Deckkraft. Versatz/Weichzeichnung bewusst proportional zur Motivgröße (nicht fest
-  // in Pixeln), damit es bei jeder Größe (17mm-Mindestgröße oder größer) wie ein echter, feiner
-  // Schatten wirkt statt wie ein fester Klecks. a=[0,0,0,x] auf RGB heißt "auf Schwarz
-  // multiplizieren" (Silhouette einfärben), b=0 addiert nichts dazu; die Alpha-Bande bleibt mit
-  // a=1 unverändert, nur zum Schluss per eigenem linear()-Aufruf auf ~35% Deckkraft reduziert.
-  const shadowOffset = Math.max(1, Math.round(finalH * 0.05));
-  const shadowBlur = Math.max(0.5, finalH * 0.04);
-  const shadow = await sharp(finalLayer)
+  // Weicher Kontaktschatten (reine Bildmathematik, keine KI): Silhouette des Anhängers, geschwärzt,
+  // etwas nach unten versetzt (passend zum etablierten "warmes Licht von links oben"-Look, siehe
+  // SYSTEM_INSTRUCTIONS_BEFORE_CLOTHING in image-generation.ts) und weichgezeichnet, mit reduzierter
+  // Deckkraft. Versatz/Weichzeichnung bewusst proportional zur Motivgröße (nicht fest in Pixeln),
+  // damit es bei jeder Größe wie ein echter, feiner Schatten wirkt statt wie ein fester Klecks.
+  // a=[0,0,0,x] auf RGB heißt "auf Schwarz multiplizieren" (Silhouette einfärben), b=0 addiert
+  // nichts dazu; die Alpha-Bande bleibt mit a=1 unverändert, erst der zweite linear()-Aufruf
+  // reduziert sie auf ~35% Deckkraft.
+  const shadowOffset = Math.max(1, Math.round(targetH * 0.05));
+  const shadowBlur = Math.max(0.5, targetH * 0.04);
+  const shadow = await sharp(resizedPendant)
     .ensureAlpha()
-    .linear(
-      [0, 0, 0, 1],
-      [0, 0, 0, 0],
-    )
+    .linear([0, 0, 0, 1], [0, 0, 0, 0])
     .blur(shadowBlur)
     .linear([1, 1, 1, 0.35], [0, 0, 0, 0])
     .png()
     .toBuffer();
 
-  return sharp(baseBuffer)
-    .composite([
-      { input: shadow, left: pasteLeft, top: pasteTop + shadowOffset },
-      { input: finalLayer, left: pasteLeft, top: pasteTop },
-    ])
-    .png()
-    .toBuffer();
+  const layers: { input: Buffer; left: number; top: number }[] = [];
+
+  // Kette unterste Ebene (liegt teilweise "unter" dem Anhänger, wie bei einer echten Kette) - nur
+  // wenn sowohl die Pose (chainLeftAnchor/chainRightAnchor) als auch das Produkt
+  // (chainColorSample) das hergeben. Fehlt eines von beiden, wird bewusst KEINE Kette gezeichnet
+  // statt eine geratene Farbe/Position zu riskieren - nur der Anhänger erscheint dann.
+  if (calibration.chainLeftAnchor && calibration.chainRightAnchor && chainColorSample) {
+    const color = await sampleAverageColor(productBuffer, chainColorSample);
+    const colorHex = `rgb(${color.r},${color.g},${color.b})`;
+    const strokeWidthPx = Math.max(1, 1.5 * calibration.pxPerMm); // ~1.5mm reale Kettenbreite
+    const attachPoint = { x: anchorX, y: pasteTop }; // oberer Rand des eingesetzten Anhängers
+    const leftPoint = {
+      x: (calibration.chainLeftAnchor.xPercent / 100) * baseW,
+      y: (calibration.chainLeftAnchor.yPercent / 100) * baseH,
+    };
+    const rightPoint = {
+      x: (calibration.chainRightAnchor.xPercent / 100) * baseW,
+      y: (calibration.chainRightAnchor.yPercent / 100) * baseH,
+    };
+    const chainLayer = await drawChain(baseW, baseH, leftPoint, rightPoint, attachPoint, colorHex, strokeWidthPx);
+    layers.push({ input: chainLayer, left: 0, top: 0 });
+  }
+
+  layers.push({ input: shadow, left: pasteLeft, top: pasteTop + shadowOffset });
+  layers.push({ input: resizedPendant, left: pasteLeft, top: pasteTop });
+
+  return sharp(baseBuffer).composite(layers).png().toBuffer();
 }
 
 // ABGESCHALTET (Stand jetzt nicht mehr im Pfad aufgerufen) - Fund vom 2026-08-23 bei 4R267R8:
@@ -336,8 +421,8 @@ export async function compositeRaw(
 // klassischen Weg den ganzen Rest der Session: gpt-image-1.5 bevorzugt ein plausibel aussehendes
 // Ergebnis gegenüber exakter Bildtreue, sobald die Vorlage für das Modell schwer lesbar ist. Bleibt
 // als Funktion erhalten (exportiert, damit kein Lint-Fehler) für den Fall, dass später ein
-// zuverlässigerer Ansatz gefunden wird (z.B. rein mathematischer Schlagschatten statt KI) - aktuell
-// liefert compositeJewelryVariant() den rohen Composite direkt aus.
+// zuverlässigerer Ansatz gefunden wird - aktuell liefert compositeJewelryVariant() den rohen
+// Composite (inkl. gezeichneter Kette + Kontaktschatten) direkt aus.
 export async function harmonizeComposite(
   compositeBuffer: Buffer,
   apiKey: string,
@@ -402,13 +487,20 @@ export async function compositeJewelryVariant(
   ]);
 
   const motifCrops = await resolveMotifCrops(product, productBuffer);
-  const rawComposite = await compositeRaw(baseBuffer, productBuffer, motifMm, motifCrops, calibration);
+  const rawComposite = await compositeRaw(
+    baseBuffer,
+    productBuffer,
+    motifMm,
+    product.produktLaengeCm,
+    motifCrops,
+    calibration,
+  );
 
-  // Kein KI-Aufruf (mehr) in diesem Pfad - siehe Kommentar bei harmonizeComposite() oben. Damit
-  // auch keine Kosten zu verbuchen: der Compositing-Weg ist aktuell komplett kostenlos (reine
-  // Bildmathematik), im Gegensatz zum klassischen Weg.
+  // Kein KI-Aufruf in diesem Pfad - siehe Kommentar bei harmonizeComposite() oben. Damit auch keine
+  // Kosten zu verbuchen: der Compositing-Weg ist komplett kostenlos (reine Bildmathematik), im
+  // Gegensatz zum klassischen Weg.
   return {
     buffer: rawComposite,
-    prompt: `[Compositing-Weg: mathematisch exakt platziert, keine KI-Nachbearbeitung] ${model.name} - ${poseVariant.label}`,
+    prompt: `[Compositing-Weg: mathematisch platziert, Kette gezeichnet, keine KI] ${model.name} - ${poseVariant.label}`,
   };
 }
