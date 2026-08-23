@@ -139,6 +139,351 @@ export const POSE_CALIBRATIONS: Record<string, PoseCalibration> = {
     chainRightAnchor: { xPercent: 66, yPercent: 50 },
     referenceChainLengthCm: 45.7,
   },
+  // Zweites Model für Colliers (erster Schritt der Model-Achse der Erweiterung) - Basisfoto per
+  // grid-overlay auf Pupillenabstand (63mm) kalibriert: pxPerMm ergibt sich (zufällig, aber
+  // plausibel, da identisches Prompt-Framing/Auflösung wie bei Sophia) zum selben Wert 2.76.
+  "claire:frontal:Colliers": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-frontal-hals.png",
+    anchorXPercent: 48,
+    anchorYPercent: 64,
+    pxPerMm: 2.76,
+    chainLeftAnchor: { xPercent: 31, yPercent: 52 },
+    chainRightAnchor: { xPercent: 65, yPercent: 52 },
+    referenceChainLengthCm: 45.7,
+  },
+  // Claire komplettiert (die übrigen 2 von 3 Posen) - ohne diese hätte die UI "Compositing" für
+  // Claire zwar angeboten, wäre aber bei genau diesen beiden Posen mit einem Fehler abgebrochen
+  // (siehe compositeJewelryVariant()). anchorYPercent weicht hier bewusst von Sophias Werten ab
+  // (53%/55% statt 63%/62%) - das jeweilige Basisfoto ist etwas weniger eng zugeschnitten
+  // (mehr Oberkörper sichtbar), per Grid-Overlay am tatsächlichen Foto nachgemessen statt von
+  // Sophia übernommen.
+  "claire:dreiviertelprofil:Colliers": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-dreiviertelprofil-hals.png",
+    anchorXPercent: 46,
+    anchorYPercent: 53,
+    pxPerMm: 2.76,
+    chainLeftAnchor: { xPercent: 39, yPercent: 44 },
+    chainRightAnchor: { xPercent: 74, yPercent: 44 },
+    referenceChainLengthCm: 45.7,
+  },
+  "claire:seitlich:Colliers": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-seitlich-hals.png",
+    anchorXPercent: 56,
+    anchorYPercent: 55,
+    pxPerMm: 2.76,
+    chainLeftAnchor: { xPercent: 27, yPercent: 49 },
+    chainRightAnchor: { xPercent: 81, yPercent: 48 },
+    referenceChainLengthCm: 45.7,
+  },
+  // Drittes Model für Colliers - alle 3 Posen direkt zusammen kalibriert. Jens Bob-Frisur (kurz,
+  // fällt seitlich am Gesicht statt über den Hals wie bei Sophia/Claire) macht den Hals in allen 3
+  // Posen durchgängig gut sichtbar - Ketten-Anker liegen deshalb tendenziell etwas symmetrischer.
+  "jen:frontal:Colliers": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-frontal-hals.png",
+    anchorXPercent: 49,
+    anchorYPercent: 57,
+    pxPerMm: 2.76,
+    chainLeftAnchor: { xPercent: 29, yPercent: 47 },
+    chainRightAnchor: { xPercent: 68, yPercent: 47 },
+    referenceChainLengthCm: 45.7,
+  },
+  "jen:dreiviertelprofil:Colliers": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-dreiviertelprofil-hals.png",
+    anchorXPercent: 54,
+    anchorYPercent: 60,
+    pxPerMm: 2.76,
+    chainLeftAnchor: { xPercent: 27, yPercent: 49 },
+    chainRightAnchor: { xPercent: 76, yPercent: 49 },
+    referenceChainLengthCm: 45.7,
+  },
+  "jen:seitlich:Colliers": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-seitlich-hals.png",
+    anchorXPercent: 45,
+    anchorYPercent: 60,
+    pxPerMm: 2.76,
+    chainLeftAnchor: { xPercent: 24, yPercent: 49 },
+    chainRightAnchor: { xPercent: 73, yPercent: 49 },
+    referenceChainLengthCm: 45.7,
+  },
+  // Viertes und letztes weibliches Model für Colliers (alle 4 aus der weiblichen Model-DNA jetzt
+  // komplett). Amaras Locken sind für dieses Referenzfoto bewusst zurückgestylt (hoher Zopf/Dutt,
+  // s. Prompt) statt offen wie sonst beschrieben - sonst wäre der Hals durch das voluminöse Haar
+  // verdeckt gewesen. Dadurch liegt der Hals in allen 3 Posen vollständig frei, Ketten-Anker
+  // brauchen hier (anders als bei offenen Frisuren) keine "verschwindet im Haar"-Logik, sondern
+  // markieren einfach den sichtbaren Halsrand auf Kieferhöhe.
+  "amara:frontal:Colliers": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-frontal-hals.png",
+    anchorXPercent: 51,
+    anchorYPercent: 61,
+    pxPerMm: 2.76,
+    chainLeftAnchor: { xPercent: 29, yPercent: 42 },
+    chainRightAnchor: { xPercent: 73, yPercent: 42 },
+    referenceChainLengthCm: 45.7,
+  },
+  "amara:dreiviertelprofil:Colliers": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-dreiviertelprofil-hals.png",
+    anchorXPercent: 52,
+    anchorYPercent: 59,
+    pxPerMm: 2.76,
+    chainLeftAnchor: { xPercent: 27, yPercent: 42 },
+    chainRightAnchor: { xPercent: 68, yPercent: 42 },
+    referenceChainLengthCm: 45.7,
+  },
+  "amara:seitlich:Colliers": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-seitlich-hals.png",
+    anchorXPercent: 45,
+    anchorYPercent: 61,
+    pxPerMm: 2.76,
+    chainLeftAnchor: { xPercent: 27, yPercent: 46 },
+    chainRightAnchor: { xPercent: 64, yPercent: 46 },
+    referenceChainLengthCm: 45.7,
+  },
+  // Erster Schritt der KATEGORIE-Achse der Erweiterung: Ring statt Colliers - andere Körperpartie
+  // (Hand statt Hals), deshalb kein chainLeftAnchor/-RightAnchor (kein Ketten-Problem bei einem
+  // Ring). compositeJewelryVariant() fällt dadurch automatisch auf den reinen Mathematik-Pfad
+  // zurück (kein KI-Aufruf, kostenlos) - siehe dortige Fallback-Logik. Ankerpunkt = Mitte des
+  // Ringfinger-Grundglieds (proximale Phalanx), per Grid-Overlay abgelesen; pxPerMm über die
+  // Nagellänge des Ringfingers geschätzt (~18mm, Standardwert), NICHT über den Pupillenabstand
+  // (auf diesem Foto ist kein Gesicht in Nahaufnahme sichtbar) - deutlich unsicherer als die
+  // Pupillen-Kalibrierung bei den Hals-Posen, nach erstem Test-Rendering ggf. nachjustieren.
+  "sophia:frontal:Ring": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-frontal-ring.png",
+    anchorXPercent: 62,
+    anchorYPercent: 49.5,
+    pxPerMm: 2.9,
+  },
+  // Ring komplettiert (die übrigen 2 von 3 Posen) - gleicher Grund wie bei Claire/Colliers: ohne
+  // diese hätte die UI "Compositing" für Ring angeboten, wäre aber bei 2 von 3 Posen mit einem
+  // Fehler abgebrochen. Die erste dreiviertelprofil-Aufnahme wurde verworfen und neu generiert -
+  // die KI hatte die Finger an die Wange gekrümmt statt flach gestreckt, was die Ringfinger-
+  // Zuordnung unzuverlässig gemacht hätte (siehe compositionHint in image-facts.ts: "NICHT
+  // gekrümmt"). pxPerMm über alle 3 Posen konsistent auf 2.9 gehalten (Mittelwert aus einzeln pro
+  // Foto über die Nagellänge geschätzten 2.7-3.1) statt pro Foto zu variieren - gleiche Begründung
+  // wie bei den Hals-Posen: ein Produkt soll über seine 3 Varianten hinweg nicht sichtbar die
+  // Größe wechseln.
+  "sophia:dreiviertelprofil:Ring": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-dreiviertelprofil-ring.png",
+    anchorXPercent: 65,
+    anchorYPercent: 64,
+    pxPerMm: 2.9,
+  },
+  "sophia:seitlich:Ring": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-seitlich-ring.png",
+    anchorXPercent: 78,
+    anchorYPercent: 62,
+    pxPerMm: 2.9,
+  },
+  // Zweite neue Kategorie: Ohrschmuck (Ohr statt Hand) - alle 3 Posen direkt zusammen kalibriert
+  // (Lehre aus Claire/Ring: nicht erst 1 Pose und die Lücke später schließen). Kein
+  // chainLeftAnchor/-RightAnchor (kein Ketten-Problem), also wieder der kostenlose Mathematik-Pfad.
+  // pxPerMm HIER bewusst NICHT über Pupillenabstand ermittelt (anders als bei den Hals-Posen) und
+  // auch NICHT über alle 3 Posen hinweg wiederverwendet: alle 3 Ohr-Fotos brauchen zwangsläufig
+  // einen gedrehten Kopf (frontal ist ein Ohr nicht sichtbar) - der scheinbare Pupillenabstand wäre
+  // also in JEDER Pose unterschiedlich stark perspektivisch verzerrt, eine "Referenzpose" gibt es
+  // hier nicht. Stattdessen: Ohrlänge (Helix-Oberkante bis Läppchen-Unterkante), Ø 63mm beim
+  // Erwachsenen - wird lokal AM Ohr selbst gemessen, direkt in der Bildebene, weitgehend unabhängig
+  // von der Kopfdrehung um die Hochachse. Ergebnis schwankt zwischen den 3 Fotos (2.63-3.08) stärker
+  // als bei den anderen Kategorien - vermutlich eher Messungenauigkeit an der weichen, konturarmen
+  // Ohrform als ein echter Größenunterschied; deshalb bewusst PRO Foto einzeln gemessen statt einen
+  // Wert zu erzwingen. Ankerpunkt = Mitte des Ohrläppchens (wo ein Ohrstecker/-hänger ansetzt).
+  "sophia:frontal:Ohrschmuck": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-frontal-ohr.png",
+    anchorXPercent: 63,
+    anchorYPercent: 39,
+    pxPerMm: 3.08,
+  },
+  "sophia:dreiviertelprofil:Ohrschmuck": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-dreiviertelprofil-ohr.png",
+    anchorXPercent: 62,
+    anchorYPercent: 35,
+    pxPerMm: 2.63,
+  },
+  "sophia:seitlich:Ohrschmuck": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-seitlich-ohr.png",
+    anchorXPercent: 57,
+    anchorYPercent: 38,
+    pxPerMm: 2.68,
+  },
+  // Claire ergänzt für Ring und Ohrschmuck (alle 3 Posen je Kategorie zusammen). Bei den Ring-
+  // Fotos lagen die Finger enger/leicht überlappend statt klar gespreizt wie bei Sophias Fotos -
+  // die Ringfinger-Zuordnung ist hier dadurch unsicherer (weniger klar abgrenzbare Nägel je Foto);
+  // nach dem Test-Rendering nochmal gegenprüfen.
+  "claire:frontal:Ring": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-frontal-ring.png",
+    anchorXPercent: 68,
+    anchorYPercent: 63,
+    pxPerMm: 2.7,
+  },
+  "claire:dreiviertelprofil:Ring": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-dreiviertelprofil-ring.png",
+    anchorXPercent: 52,
+    anchorYPercent: 63,
+    pxPerMm: 2.7,
+  },
+  "claire:seitlich:Ring": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-seitlich-ring.png",
+    anchorXPercent: 56,
+    anchorYPercent: 56,
+    pxPerMm: 2.7,
+  },
+  // KORREKTUR (Remeasure): Die ursprünglichen Werte hier waren fehlerhaft - der Ohrring landete
+  // sichtbar zu weit vorne/oben auf Wange/Kieferlinie statt auf dem Ohrläppchen (Test mit 2G386W8).
+  // Direkter Bildvergleich (identischer Crop-Ausschnitt) zeigt: Claires und Sophias Ohr-Fotos sind
+  // in allen 3 Posen praktisch deckungsgleich geframt (gleiche Ohrgröße, gleiche Kopfposition) -
+  // Sophias verifizierter Anker (gleiche Pose) trifft bei Claire exakt denselben anatomischen Punkt
+  // (Tragus/Läppchen-Übergang). Deshalb hier bewusst Sophias Werte 1:1 übernommen statt neu (und
+  // wieder fehleranfällig) am weichen, konturarmen Ohr zu messen.
+  "claire:frontal:Ohrschmuck": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-frontal-ohr.png",
+    anchorXPercent: 63,
+    anchorYPercent: 39,
+    pxPerMm: 3.08,
+  },
+  "claire:dreiviertelprofil:Ohrschmuck": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-dreiviertelprofil-ohr.png",
+    anchorXPercent: 62,
+    anchorYPercent: 35,
+    pxPerMm: 2.63,
+  },
+  "claire:seitlich:Ohrschmuck": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-seitlich-ohr.png",
+    anchorXPercent: 57,
+    anchorYPercent: 38,
+    pxPerMm: 2.68,
+  },
+  // Jen ergänzt für Ring und Ohrschmuck (dritte Model, alle 3 Posen je Kategorie zusammen).
+  // WICHTIGER Zwischenfall bei der Ring-Generierung: die ersten Versuche für frontal/
+  // dreiviertelprofil haben trotz expliziter "KEIN Schmuck jeglicher Art"-Anweisung im Prompt
+  // TROTZDEM einen Ring auf die Hand gerendert - die visuelle Assoziation "elegante Hand nahe
+  // Schlüsselbein/Kinn = Verlobungsring-Foto" hat die Anweisung offenbar überstimmt. Fix: beide
+  // Fotos mit einer zusätzlich vorangestellten, mehrfach wiederholten "AUSDRÜCKLICH KEIN Ring"-
+  // Klausel neu generiert (seitlich war beim ersten Versuch bereits schmucklos, musste aber aus
+  // einem anderen Grund neu generiert werden - siehe unten). Bei jeder neuen Model/Kategorie-
+  // Kombination mit "Hand nahe Gesicht"-Posen also aktiv gegenprüfen, nicht nur auf die Prompt-
+  // Klausel vertrauen. Der Direktvergleich-Trick von Claire/Ohrschmuck (Sophias verifizierten
+  // Anker übertragen) hat hier NICHT funktioniert - Jens Kopf/Ohr sitzt wegen der anderen Frisur
+  // (kurzer Bob statt langer Wellen) sichtbar anders im Bildausschnitt; alle 6 Anker deshalb neu
+  // per Grid-Overlay direkt an Jens eigenen Fotos gemessen. pxPerMm mangels verlässlicher
+  // Anatomie-Konstante (Ring) bzw. wegen haarbedecktem Helix-Ansatz (Ohrschmuck) auf plausible
+  // Schätzwerte im selben Bereich wie Sophia/Claire gesetzt, nach Test-Rendering zu verifizieren.
+  "jen:frontal:Ring": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-frontal-ring.png",
+    anchorXPercent: 54,
+    anchorYPercent: 62,
+    pxPerMm: 2.8,
+  },
+  "jen:dreiviertelprofil:Ring": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-dreiviertelprofil-ring.png",
+    anchorXPercent: 47,
+    anchorYPercent: 60,
+    pxPerMm: 2.8,
+  },
+  // Seitlich musste separat neu generiert werden: der erste Versuch zeigte nur eine einzelne
+  // angedeutete Fingerspitze am Kinn statt einer klar erkennbaren, gespreizten Hand (Finger zu
+  // stark eingerollt für eine zuverlässige Ringfinger-Zuordnung) - mit einer verstärkten, expliziten
+  // "flache Hand auf dem Schlüsselbein"-Anweisung neu generiert (analog zu Claires Referenzpose).
+  "jen:seitlich:Ring": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-seitlich-ring.png",
+    anchorXPercent: 73,
+    anchorYPercent: 66,
+    pxPerMm: 2.8,
+  },
+  "jen:frontal:Ohrschmuck": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-frontal-ohr.png",
+    anchorXPercent: 75,
+    anchorYPercent: 39,
+    pxPerMm: 3.0,
+  },
+  "jen:dreiviertelprofil:Ohrschmuck": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-dreiviertelprofil-ohr.png",
+    anchorXPercent: 70,
+    anchorYPercent: 34,
+    pxPerMm: 2.8,
+  },
+  "jen:seitlich:Ohrschmuck": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-seitlich-ohr.png",
+    anchorXPercent: 72,
+    anchorYPercent: 34,
+    pxPerMm: 2.8,
+  },
+  // Amara ergänzt für Ring und Ohrschmuck (viertes und letztes weibliches Model, alle 3 Posen je
+  // Kategorie zusammen). Lehren aus Jen von Anfang an eingebaut: verstärkte "AUSDRÜCKLICH KEIN
+  // Ring"-Klausel im Prompt (trotzdem einmal ein winziger Ohrstecker auf dem RING-Foto durchgerutscht
+  // - dort irrelevant, da nur die Hand ausgewertet wird, aber ein Beleg dass die Klausel keine
+  // 100%-Garantie ist) sowie explizite "ganze Hand flach, alle 4 Finger sichtbar gespreizt"-Vorgabe
+  // - alle 6 Fotos beim ersten Versuch brauchbar, keine Neugenerierung nötig. Alle 3 Ohrschmuck-
+  // Fotos gegengeprüft: kein Schmuck am Ohr sichtbar (nur ein harmloses Muttermal auf 2 der 3
+  // Fotos). Anker wie immer per Grid-Overlay direkt gemessen (kein Direktvergleich-Trick möglich,
+  // andere Frisur/Kopfposition als Sophia/Claire).
+  "amara:frontal:Ring": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-frontal-ring.png",
+    anchorXPercent: 64,
+    anchorYPercent: 65,
+    pxPerMm: 2.8,
+  },
+  "amara:dreiviertelprofil:Ring": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-dreiviertelprofil-ring.png",
+    anchorXPercent: 66,
+    anchorYPercent: 57,
+    pxPerMm: 2.8,
+  },
+  "amara:seitlich:Ring": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-seitlich-ring.png",
+    anchorXPercent: 68,
+    anchorYPercent: 42,
+    pxPerMm: 2.8,
+  },
+  "amara:frontal:Ohrschmuck": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-frontal-ohr.png",
+    anchorXPercent: 74,
+    anchorYPercent: 37,
+    pxPerMm: 2.9,
+  },
+  "amara:dreiviertelprofil:Ohrschmuck": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-dreiviertelprofil-ohr.png",
+    anchorXPercent: 68,
+    anchorYPercent: 39,
+    pxPerMm: 2.8,
+  },
+  "amara:seitlich:Ohrschmuck": {
+    baseImageUrl:
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-seitlich-ohr.png",
+    anchorXPercent: 63,
+    anchorYPercent: 30,
+    pxPerMm: 2.8,
+  },
 };
 
 function categoryBucket(hauptkategorie: string | null): string | null {
@@ -210,12 +555,50 @@ const PRODUCT_MOTIF_OVERRIDES: Record<string, MotifCropOverride> = {
   "4R267R8": { left: 600, top: 1140, width: 840, height: 640 },
 };
 
+// Diamond-Group-Freisteller-Fotos für Ohrschmuck (Ohrstecker) zeigen in EINEM Bild oft zwei
+// Ansichten DESSELBEN Einzelstücks nebeneinander: Vorderansicht links, Rückseite mit Steg/
+// Schmetterlingsverschluss rechts - KEIN Paar, nur eine zweite Ansicht. Fund 2026-08-24: an 3
+// verschiedenen Ohrschmuck-Produkten stichprobenartig geprüft (2G386W8, 2Y112G8, 2J666W8), bei
+// allen dreien dieselbe Anordnung. Ohne Gegenmaßnahme erfasst detectMotifBoundingBox() die VOLLE
+// Bounding Box (beide Ansichten zusammen) und montiert sie als EIN Motiv auf das Ohr - sichtbar im
+// Ergebnis als zwei Ohrringe auf einem Ohr statt einem. Fix: bei Ohrschmuck zuerst nur die linke
+// Bildhälfte auf ein Motiv hin untersuchen (die Vorderansicht liegt in allen bisher geprüften
+// Beispielen konsistent links); schlägt das fehl (z.B. ein Produktfoto ohne diese Konvention, oder
+// eine Kreole/ein Ohrring ohne zweite Ansicht), fällt resolvePendantCrop() unten auf die normale
+// Ganzbild-Erkennung zurück statt zu raten. Nicht für andere Kategorien angewendet - bei Ring/
+// Colliers bisher nicht beobachtet, könnte aber bei künftigen Stichproben ebenfalls auftreten.
+async function resolveOhrschmuckCrop(productBuffer: Buffer): Promise<MotifCropOverride | null> {
+  const sharp = await loadSharp();
+  const meta = await sharp(productBuffer).metadata();
+  const fullWidth = meta.width ?? 0;
+  const fullHeight = meta.height ?? 0;
+  if (!fullWidth || !fullHeight) return null;
+  const halfWidth = Math.floor(fullWidth / 2);
+  const leftHalf = await sharp(productBuffer)
+    .extract({ left: 0, top: 0, width: halfWidth, height: fullHeight })
+    .png()
+    .toBuffer();
+  const detected = await detectMotifBoundingBox(leftHalf);
+  if (!detected) return null;
+  // Sicherheitscheck: reicht das erkannte Motiv fast bis an den rechten Rand der linken Hälfte
+  // heran, wurde es dort vermutlich nicht durch eigenen Freiraum begrenzt, sondern von UNS
+  // abgeschnitten (Produkt ohne die Vorderansicht-links/Rückseite-rechts-Konvention, Motiv geht
+  // über die Bildmitte hinaus) - dann lieber auf die normale Ganzbild-Erkennung zurückfallen statt
+  // ein halbiertes Motiv zu montieren.
+  const cutOff = detected.left + detected.width > halfWidth * 0.95;
+  return cutOff ? null : detected;
+}
+
 async function resolvePendantCrop(
   product: SourceProductRow,
   productBuffer: Buffer,
 ): Promise<MotifCropOverride> {
   const override = PRODUCT_MOTIF_OVERRIDES[product.modellErweitert];
   if (override) return override;
+  if (product.hauptkategorie === "Ohrschmuck") {
+    const ohrschmuckCrop = await resolveOhrschmuckCrop(productBuffer);
+    if (ohrschmuckCrop) return ohrschmuckCrop;
+  }
   const detected = await detectMotifBoundingBox(productBuffer);
   if (detected) return detected;
   throw new Error(
@@ -292,7 +675,13 @@ export async function compositeRaw(
   const scaleFactor = targetLongerPx / pendantLongerPx;
   const targetW = Math.max(1, Math.round(pendantCrop.width * scaleFactor));
   const targetH = Math.max(1, Math.round(pendantCrop.height * scaleFactor));
-  const resizedPendant = await sharp(cropped).resize(targetW, targetH).png().toBuffer();
+  // sharpen() nach dem Resize: bei sehr kleinen Zielgrößen (z.B. ein 14mm-Ringkopf auf ~50px bei
+  // pxPerMm~2.9, siehe MIN_RENDER_MM) verwäscht ein reines resize() feine Details (Pavé-Diamanten,
+  // Krappen) zu einem unscharfen Fleck - deutlich sichtbar bei einem ersten Test-Rendering
+  // (Sophia/Ring, 2026-08-23). Ein moderater Schärfungs-Pass danach stellt eher wahrnehmbare
+  // Kanten/Facetten wieder her, ohne Artefakte zu erzeugen - kommt allen Kategorien zugute, nicht
+  // nur Ring.
+  const resizedPendant = await sharp(cropped).resize(targetW, targetH).sharpen({ sigma: 1 }).png().toBuffer();
 
   const anchorX = Math.round((calibration.anchorXPercent / 100) * baseW);
   const anchorY = Math.round((adjustedAnchorYPercent(calibration, chainLengthCm, baseH) / 100) * baseH);
