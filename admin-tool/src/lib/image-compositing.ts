@@ -39,14 +39,19 @@ async function loadSharp() {
 // 2) Kette als Vektor-Kurve gezeichnet (SVG, feste Farbe aus dem Produktfoto abgetastet) - passte
 //    sich zwar an jede Pose an, sah aber wie eine "gezeichnete" gerade Linie aus, nicht wie Metall
 //    (keine Glieder-Textur, keine Lichtreflexe) - zu großer Stilbruch im sonst fotorealistischen Bild.
-// 3) Aktuell: Anhänger bleibt EXAKT wie in 1)/2) (Bildmathematik, garantiert korrekte Größe/Design),
-//    aber die Kette wird von gpt-image-1.5 in einen schmalen MASKIERTEN Korridor hineingeneriert
-//    (generateChainViaMask()) - mit dem echten Produktfoto als Stilreferenz für Material/Farbe/
-//    Gliederform. Sieht photorealistisch aus. WICHTIGER VORBEHALT: die Maske ist bei gpt-image-1.5
+// 3) Anhänger bleibt EXAKT wie in 1)/2) (Bildmathematik, garantiert korrekte Größe/Design), aber
+//    die Kette wird von gpt-image-1.5 in einen schmalen MASKIERTEN Korridor hineingeneriert
+//    (generateChainViaMask()). ERSTER Versuch gab zusätzlich das rohe Produktfoto als zweites
+//    Referenzbild mit (für Material/Farbe/Gliederform) - Ergebnis: die KI hat sich davon nicht nur
+//    inhaltlich, sondern auch stilistisch leiten lassen und die KOMPLETTE Bildkomposition verworfen
+//    (Pose/Gesicht/Hintergrund neu generiert, einmal sogar auf den transparenten Hintergrund des
+//    Produktfotos zurückgesetzt) - hat die drei kalibrierten Posen faktisch ignoriert. Fix: KEIN
+//    zweites Bild mehr, Material/Farbe nur noch per Textbeschreibung - damit bleibt die Pose
+//    zuverlässig erhalten. WICHTIGER VORBEHALT bleibt trotzdem: die Maske ist bei gpt-image-1.5
 //    KEINE harte Pixel-Garantie wie bei klassischem DALL-E-2-Inpainting - ein Pixelvergleich hat
 //    gezeigt, dass auch außerhalb des Korridors (z.B. Bildecken) leicht andere Werte herauskommen
-//    (globale Neubelichtung). Der Anhänger bleibt dadurch nicht mehr zu 100% pixelgenau garantiert,
-//    nur noch "mit hoher Wahrscheinlichkeit weitgehend unverändert" - explizite Nutzerentscheidung
+//    (globale Neubelichtung). Der Anhänger bleibt dadurch nicht zu 100% pixelgenau garantiert, nur
+//    noch "mit hoher Wahrscheinlichkeit weitgehend unverändert" - explizite Nutzerentscheidung
 //    (bestmögliche Optik statt harter Größen-Garantie). Macht diesen Pfad außerdem wieder
 //    kostenpflichtig (ein echter OpenAI-Aufruf pro Variante), nicht mehr komplett kostenlos.
 //
@@ -382,34 +387,40 @@ async function buildChainMask(
 // (globale Neu-Belichtung). Der Anhänger bleibt dadurch NICHT zu 100% pixelgenau erhalten, nur mit
 // hoher Wahrscheinlichkeit weitgehend unverändert. Bewusste Nutzerentscheidung (2026-08-23):
 // bestmögliche Optik hat Vorrang vor der harten Größen-Garantie des reinen Mathematik-Wegs.
+// NUR EIN Bild (pendantOnlyBuffer), bewusst OHNE das rohe Produktfoto als zweites Referenzbild -
+// Fund 2026-08-23: mit dem Produktfoto als zweitem Bild hat gpt-image-1.5 nicht nur die Kette
+// gezeichnet, sondern die komplette Bildkomposition verworfen (Pose/Gesicht/Hintergrund neu
+// generiert, in einem Fall sogar auf den TRANSPARENTEN Hintergrund des Produktfotos zurückgesetzt) -
+// es hat sich also nicht nur inhaltlich, sondern auch stilistisch am zweiten (posenlosen,
+// teils transparenten) Produktfoto orientiert, nicht nur an der Maske. Ohne zweites Bild bleibt die
+// Pose (Gesicht, Haare, Kleidung, Hintergrund) zuverlässig erhalten, Material/Farbe kommt jetzt
+// ausschließlich per Textbeschreibung (materialLabel).
 async function generateChainViaMask(
   pendantOnlyBuffer: Buffer,
-  productBuffer: Buffer,
   maskBuffer: Buffer,
   materialLabel: string | null,
   apiKey: string,
 ): Promise<{ buffer: Buffer; usage: unknown }> {
-  const materialHint = materialLabel ? ` Material: ${materialLabel}.` : "";
+  const materialHint = materialLabel ? ` aus ${materialLabel} (warmes Roségold)` : "";
   const prompt =
     "Kontext: professionelle E-Commerce-Schmuckfotografie, seriös, nicht sexualisiert. Zeichne NUR " +
-    "im transparenten/editierbaren Bereich der Maske eine dünne, elegante Halskette, die natürlich " +
-    "vom Hals kommend zu dem bereits vorhandenen Anhänger führt und dort ansetzt - exakt im Stil " +
-    "(Farbe, Gliederform, Metallglanz) wie im zweiten Referenzbild gezeigt." +
-    materialHint +
-    " Die Kette liegt eng am Hals an, mit realistischem Metallglanz und feinen Lichtreflexen, " +
-    "keine übertriebene Dicke. Der Rest des Bildes (Gesicht, Haare, Kleidung, Hintergrund, der " +
-    "bereits platzierte Anhänger) ist durch die Maske geschützt - verändere dort nichts. Kein " +
-    "zusätzlicher Schmuck.";
+    "im transparenten/editierbaren Bereich der Maske eine dünne, elegante Halskette (Ankerkette/" +
+    `Cable-Kette)${materialHint}, die natürlich vom Hals kommend zu dem bereits vorhandenen ` +
+    "Anhänger führt und dort ansetzt, mit realistischem Metallglanz und feinen Lichtreflexen, " +
+    "keine übertriebene Dicke. KRITISCH: Das Ausgabebild muss EXAKT denselben Bildausschnitt, " +
+    "dieselbe Kopfhaltung, denselben Zoom/Crop und denselben Hintergrund wie das gegebene Bild " +
+    "behalten - vergrößere/verkleinere/beschneide NICHTS. Der Rest des Bildes (Gesicht, Haare, " +
+    "Kleidung, Hintergrund, der bereits platzierte Anhänger) ist durch die Maske geschützt - " +
+    "verändere dort nichts. Kein zusätzlicher Schmuck.";
 
-  const [pendantFile, productFile, maskFile] = await Promise.all([
+  const [pendantFile, maskFile] = await Promise.all([
     toFile(pendantOnlyBuffer, "pendant-only", { type: "image/png" }),
-    toFile(productBuffer, "product-reference", { type: "image/png" }),
     toFile(maskBuffer, "mask", { type: "image/png" }),
   ]);
 
   const client = new OpenAI({ apiKey, maxRetries: 6 });
   const response = await client.images.edit({
-    image: [pendantFile, productFile],
+    image: [pendantFile],
     mask: maskFile,
     prompt,
     model: OPENAI_IMAGE_MODEL,
@@ -488,13 +499,7 @@ export async function compositeJewelryVariant(
   const mask = await buildChainMask(baseW, baseH, leftPoint, rightPoint, attachPoint);
 
   const materialLabel = [product.hauptmaterial, product.legierung].filter(Boolean).join(", ") || null;
-  const { buffer: withChain, usage } = await generateChainViaMask(
-    pendantOnly,
-    productBuffer,
-    mask,
-    materialLabel,
-    apiKey,
-  );
+  const { buffer: withChain, usage } = await generateChainViaMask(pendantOnly, mask, materialLabel, apiKey);
 
   await recordApiUsage({
     provider: "openai",
