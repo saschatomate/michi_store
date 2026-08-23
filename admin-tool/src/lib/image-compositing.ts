@@ -155,29 +155,45 @@ export async function detectMotifBoundingBox(
 
 export type MotifCropOverride = { left: number; top: number; width: number; height: number };
 
+// Zwei getrennte Ausschnitte, NICHT derselbe (das war der eigentliche Bug vom 2026-08-23):
+// - extractionCrop: was tatsächlich ausgeschnitten, skaliert und eingefügt wird (bei 4R267R8 der
+//   BREITE Ausschnitt inkl. Kette).
+// - scaleReferenceCrop: welcher TEIL davon dem bekannten Realmaß (motifMm) entspricht (bei
+//   4R267R8 NUR der Cluster, ohne Kette). Nur dieser Teil darf für die Umrechnung mm→Pixel
+//   herangezogen werden - wird stattdessen (wie im ersten Fix-Versuch fälschlich) die Größe des
+//   GESAMTEN extractionCrop als "das sind motifMm" behandelt, kommt ein viel zu kleiner Maßstab
+//   heraus (die Kette spannt real deutlich mehr als motifMm auf), und die dünne Kette verschwindet
+//   beim Verkleinern komplett - genau das hat der Nutzer bemerkt.
+// Wenn beide identisch sind (Normalfall bei echten transparenten Cutouts ohne Kettenanteil im
+// Crop), macht das keinen Unterschied.
+export type ProductMotifCrops = {
+  extractionCrop: MotifCropOverride;
+  scaleReferenceCrop: MotifCropOverride;
+};
+
 // Manuelle Motiv-Ausschnitte für Produkte, bei denen detectMotifBoundingBox() nicht zuverlässig
 // funktioniert (deckender Studio-Hintergrund statt echter Transparenz, siehe dort). Schlüssel:
 // modellErweitert. 4R267R8 wurde einmalig über ein Prozent-Grid-Overlay auf dem 2000x2000-Foto
-// ausgemessen (Cluster ca. x:42-69%, y:55-87%). Jedes weitere Produkt mit demselben Freisteller-
-// Stil braucht vorerst denselben manuellen Schritt, bis eine robustere automatische Erkennung
-// (z.B. über eine Vision-API statt reinem Alpha-Trim) existiert.
-const PRODUCT_MOTIF_OVERRIDES: Record<string, MotifCropOverride> = {
-  // Bewusst der BREITE Ausschnitt (mit Kette), nicht nur die enge Cluster-Bounding-Box
-  // (840/1100/540/640) - bei so starker Verkleinerung verschmelzen die 3 einzelnen Steine sonst zu
-  // einem nicht mehr erkennbaren Blob. Der breitere Ausschnitt ändert daran zwar nichts an der
-  // Auflösung des Clusters selbst (der bleibt gleich groß), sorgt aber wenigstens für die auch
-  // sichtbare Kette; siehe compositeRaw()-Kommentar zur eigentlichen Auflösungsgrenze.
-  "4R267R8": { left: 400, top: 0, width: 1200, height: 1800 },
+// ausgemessen (Cluster/scaleReferenceCrop ca. x:42-69%, y:55-87%; extractionCrop breiter, damit die
+// Kette mit im Bild ist). Jedes weitere Produkt mit demselben Freisteller-Stil braucht vorerst
+// denselben manuellen Schritt, bis eine robustere automatische Erkennung existiert.
+const PRODUCT_MOTIF_OVERRIDES: Record<string, ProductMotifCrops> = {
+  "4R267R8": {
+    extractionCrop: { left: 400, top: 0, width: 1200, height: 1800 },
+    scaleReferenceCrop: { left: 840, top: 1100, width: 540, height: 640 },
+  },
 };
 
-async function resolveMotifCrop(
+async function resolveMotifCrops(
   product: SourceProductRow,
   productBuffer: Buffer,
-): Promise<MotifCropOverride> {
+): Promise<ProductMotifCrops> {
   const override = PRODUCT_MOTIF_OVERRIDES[product.modellErweitert];
   if (override) return override;
+  // Ohne manuellen Override sind extraction- und scaleReferenceCrop identisch - die automatisch
+  // erkannte Bounding Box ist dann sowohl "was wir ausschneiden" als auch "was motifMm entspricht".
   const detected = await detectMotifBoundingBox(productBuffer);
-  if (detected) return detected;
+  if (detected) return { extractionCrop: detected, scaleReferenceCrop: detected };
   throw new Error(
     `Motiv-Bereich für ${product.modellErweitert} konnte nicht automatisch erkannt werden ` +
       `(vermutlich kein echter transparenter Freisteller-Hintergrund) und ist auch nicht in ` +
@@ -185,37 +201,59 @@ async function resolveMotifCrop(
   );
 }
 
-// Reine Bildmathematik (keine KI): schneidet den Motiv-Bereich aus dem Produktfoto, skaliert ihn
-// anhand der bekannten Realgröße (motifMm, aus breite/höhe der Produktdaten) exakt auf den
-// Maßstab des Basisfotos (calibration.pxPerMm) und setzt ihn zentriert auf den Ankerpunkt.
+// Sehr kleine Motive (<MIN_RENDER_MM) werden bewusst NICHT auf ihre exakte Realgröße
+// herunterskaliert, sondern auf eine Mindestgröße angehoben. Grund (Fund 2026-08-23 bei 4R267R8,
+// 11mm-Cluster): in echter 1:1-Größe ist das Motiv auf dem Produktfoto kaum wahrnehmbar, obwohl
+// die Darstellung technisch korrekt wäre - echte Schmuck-Kataloge zeigen sehr kleine Stücke aus
+// demselben Grund fast immer leicht vergrößert. 17mm ist eine bewusst moderate Untergrenze
+// (Erbse/Kirsche) - deutlich näher an der Realität als der klassische KI-Weg (der kleine Stücke
+// oft aufs 2-3-fache aufbläst), aber groß genug, um überhaupt als Schmuckstück erkennbar zu sein.
+// Nebeneffekt: mehr Zielpixel = weniger Detailverlust beim Verkleinern. Größere/reale Stücke
+// (>=17mm, die ohnehin gut lesbar sind) bleiben unverändert in exakter Realgröße.
+const MIN_RENDER_MM = 17;
+
+// Reine Bildmathematik (keine KI): schneidet extractionCrop aus dem Produktfoto, skaliert ihn so,
+// dass scaleReferenceCrop darin exakt motifMm (ggf. auf MIN_RENDER_MM angehoben) im Maßstab des
+// Basisfotos entspricht, und setzt ihn so ein, dass die MITTE von scaleReferenceCrop (nicht die
+// Mitte des ganzen extractionCrop, die kann bei einem breiten Ausschnitt deutlich daneben liegen)
+// exakt auf dem Ankerpunkt landet.
 export async function compositeRaw(
   baseBuffer: Buffer,
   productBuffer: Buffer,
   motifMm: number,
-  motifCrop: MotifCropOverride,
+  crops: ProductMotifCrops,
   calibration: PoseCalibration,
 ): Promise<Buffer> {
   const sharp = await loadSharp();
+  const { extractionCrop, scaleReferenceCrop } = crops;
   const baseMeta = await sharp(baseBuffer).metadata();
   const baseW = baseMeta.width!;
   const baseH = baseMeta.height!;
 
-  const cropped = await sharp(productBuffer).extract(motifCrop).png().toBuffer();
+  const cropped = await sharp(productBuffer).extract(extractionCrop).png().toBuffer();
 
-  // Skalierungsfaktor: wie viel kleiner/größer muss der Ausschnitt werden, damit seine LÄNGERE
-  // Seite im Zielfoto motifMm * calibration.pxPerMm Pixel misst (motifMm bezieht sich auf die
-  // größere reale Abmessung, siehe motifSizeMm() in image-generation.ts).
-  const cropLongerPx = Math.max(motifCrop.width, motifCrop.height);
-  const targetLongerPx = motifMm * calibration.pxPerMm;
-  const scaleFactor = targetLongerPx / cropLongerPx;
-  const targetW = Math.max(1, Math.round(motifCrop.width * scaleFactor));
-  const targetH = Math.max(1, Math.round(motifCrop.height * scaleFactor));
+  // Skalierungsfaktor: wie viel kleiner/größer muss extractionCrop werden, damit scaleReferenceCrop
+  // darin (dieselbe Bildauflösung, also gleicher Faktor für beide) mit seiner LÄNGEREN Seite
+  // effectiveMm * calibration.pxPerMm Pixel misst (motifMm bezieht sich auf die größere reale
+  // Abmessung, siehe motifSizeMm() in image-generation.ts; effectiveMm siehe MIN_RENDER_MM oben).
+  const effectiveMm = Math.max(motifMm, MIN_RENDER_MM);
+  const referenceLongerPx = Math.max(scaleReferenceCrop.width, scaleReferenceCrop.height);
+  const targetReferenceLongerPx = effectiveMm * calibration.pxPerMm;
+  const scaleFactor = targetReferenceLongerPx / referenceLongerPx;
+  const targetW = Math.max(1, Math.round(extractionCrop.width * scaleFactor));
+  const targetH = Math.max(1, Math.round(extractionCrop.height * scaleFactor));
   const resized = await sharp(cropped).resize(targetW, targetH).png().toBuffer();
+
+  // Wo landet die Mitte von scaleReferenceCrop innerhalb des jetzt skalierten extractionCrop?
+  const refCenterRelX = scaleReferenceCrop.left - extractionCrop.left + scaleReferenceCrop.width / 2;
+  const refCenterRelY = scaleReferenceCrop.top - extractionCrop.top + scaleReferenceCrop.height / 2;
+  const refCenterInResizedX = (refCenterRelX / extractionCrop.width) * targetW;
+  const refCenterInResizedY = (refCenterRelY / extractionCrop.height) * targetH;
 
   const anchorX = Math.round((calibration.anchorXPercent / 100) * baseW);
   const anchorY = Math.round((calibration.anchorYPercent / 100) * baseH);
-  const pasteLeft = Math.round(anchorX - targetW / 2);
-  const pasteTop = Math.round(anchorY - targetH / 2);
+  const pasteLeft = Math.round(anchorX - refCenterInResizedX);
+  const pasteTop = Math.round(anchorY - refCenterInResizedY);
 
   return sharp(baseBuffer)
     .composite([{ input: resized, left: pasteLeft, top: pasteTop }])
@@ -298,8 +336,8 @@ export async function compositeJewelryVariant(
     fetchImageBuffer(refUrl),
   ]);
 
-  const motifCrop = await resolveMotifCrop(product, productBuffer);
-  const rawComposite = await compositeRaw(baseBuffer, productBuffer, motifMm, motifCrop, calibration);
+  const motifCrops = await resolveMotifCrops(product, productBuffer);
+  const rawComposite = await compositeRaw(baseBuffer, productBuffer, motifMm, motifCrops, calibration);
 
   // Kein KI-Aufruf (mehr) in diesem Pfad - siehe Kommentar bei harmonizeComposite() oben. Damit
   // auch keine Kosten zu verbuchen: der Compositing-Weg ist aktuell komplett kostenlos (reine
