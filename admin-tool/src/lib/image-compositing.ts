@@ -1,5 +1,4 @@
 import "server-only";
-import sharp from "sharp";
 import OpenAI, { toFile } from "openai";
 import type { sourceProducts } from "@/db/schema";
 import type { MarinellModel, PoseVariant } from "@/lib/image-facts";
@@ -9,6 +8,20 @@ import { estimateOpenAiImageCost, recordApiUsage } from "@/lib/cost-tracking";
 type SourceProductRow = typeof sourceProducts.$inferSelect;
 
 const OPENAI_IMAGE_MODEL = "gpt-image-1.5";
+
+// BEWUSST dynamischer Import statt "import sharp from 'sharp'" oben: ein statischer Top-Level-
+// Import hätte sharp bei JEDEM Laden dieses Moduls sofort ausgewertet - und damit bei JEDEM Aufruf
+// von hasCompositingSupport()/findCalibration() (aufgerufen von products/[id]/page.tsx, also bei
+// JEDER Produktseite, nicht nur beim tatsächlichen Compositing). Ein Sharp-Ladefehler (z.B.
+// Turbopack-Bundling der nativen Bindings, siehe next.config.ts serverExternalPackages, oder ein
+// Plattform-Problem auf dem Deployment-Server) hätte dadurch die komplette Produktseite für ALLE
+// Produkte mit Internal Server Error abgeschossen - genau das ist einmal live passiert. Mit
+// dynamischem Import schlägt ein Sharp-Problem nur noch dort fehl, wo Compositing tatsächlich
+// ausgeführt wird (detectMotifBoundingBox/compositeRaw), nicht beim bloßen Anzeigen einer Seite.
+async function loadSharp() {
+  const mod = await import("sharp");
+  return mod.default;
+}
 
 // --- MARINELL Compositing-Pfad (Beta) ---------------------------------------------------------
 // Zweiter, unabhängiger Generierungsweg NEBEN generateProductImageVariant() (image-generation.ts) -
@@ -102,6 +115,7 @@ export function hasCompositingSupport(
 export async function detectMotifBoundingBox(
   buffer: Buffer,
 ): Promise<{ left: number; top: number; width: number; height: number } | null> {
+  const sharp = await loadSharp();
   const original = await sharp(buffer).metadata();
   const { info } = await sharp(buffer).trim({ threshold: 10 }).toBuffer({ resolveWithObject: true });
   const shrunkEnough =
@@ -152,6 +166,7 @@ export async function compositeRaw(
   motifCrop: MotifCropOverride,
   calibration: PoseCalibration,
 ): Promise<Buffer> {
+  const sharp = await loadSharp();
   const baseMeta = await sharp(baseBuffer).metadata();
   const baseW = baseMeta.width!;
   const baseH = baseMeta.height!;
