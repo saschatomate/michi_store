@@ -60,6 +60,16 @@ export type PoseCalibration = {
    * estimatedFrameWidthMm aus image-facts.ts (das war der Ansatz für den klassischen Prompt-Weg).
    */
   pxPerMm: number;
+  /**
+   * Rotation in Grad (sharp-Konvention, positiv = im Uhrzeigersinn), mit der der eingefügte
+   * Ausschnitt gedreht wird, bevor er auf den Ankerpunkt gesetzt wird - Zwischenschritt, um die
+   * Kette grob an den Hals-/Schulterwinkel dieser Pose anzupassen. Bewusst nur eine grobe erste
+   * Schätzung (Fund 2026-08-23: die Kette lag ohne jede Drehung sichtbar "drüber" statt "dran"
+   * bei Dreiviertelprofil/Seitlich). Physikalisch nicht ganz korrekt, weil dabei auch der Anhänger
+   * mitgedreht wird, obwohl ein echter Anhänger durch die Schwerkraft eher aufrecht hängen bleibt,
+   * unabhängig vom Kopfwinkel - siehe Kommentar bei compositeRaw(). Fehlt/0 = keine Drehung.
+   */
+  rotationDeg?: number;
 };
 
 // Schlüssel: `${modelKey}:${poseKey}:${kategorieBucket}`. Colliers/Anhänger und Armbänder/
@@ -85,6 +95,10 @@ export const POSE_CALIBRATIONS: Record<string, PoseCalibration> = {
     anchorXPercent: 52,
     anchorYPercent: 63,
     pxPerMm: 2.76,
+    // Erste grobe Schätzung (nicht ausgemessen) - Zwischenschritt auf Nutzerwunsch, um zu sehen,
+    // ob Richtung/Größenordnung überhaupt stimmt, bevor die aufwändigere Lösung (Kette separat
+    // prozedural zeichnen statt drehen) gebaut wird. Nach Sichtprüfung anpassen/Vorzeichen drehen.
+    rotationDeg: -8,
   },
   "sophia:seitlich:Colliers": {
     baseImageUrl:
@@ -92,6 +106,8 @@ export const POSE_CALIBRATIONS: Record<string, PoseCalibration> = {
     anchorXPercent: 48,
     anchorYPercent: 62,
     pxPerMm: 2.76,
+    // Ebenfalls erste grobe Schätzung, siehe Kommentar oben bei dreiviertelprofil.
+    rotationDeg: 12,
   },
 };
 
@@ -247,16 +263,65 @@ export async function compositeRaw(
   // Wo landet die Mitte von scaleReferenceCrop innerhalb des jetzt skalierten extractionCrop?
   const refCenterRelX = scaleReferenceCrop.left - extractionCrop.left + scaleReferenceCrop.width / 2;
   const refCenterRelY = scaleReferenceCrop.top - extractionCrop.top + scaleReferenceCrop.height / 2;
-  const refCenterInResizedX = (refCenterRelX / extractionCrop.width) * targetW;
-  const refCenterInResizedY = (refCenterRelY / extractionCrop.height) * targetH;
+  let refCenterInFinalX = (refCenterRelX / extractionCrop.width) * targetW;
+  let refCenterInFinalY = (refCenterRelY / extractionCrop.height) * targetH;
+  let finalLayer = resized;
+  let finalW = targetW;
+  let finalH = targetH;
+
+  // Optionale Rotation (siehe rotationDeg-Kommentar bei PoseCalibration) - sharp dreht um die
+  // BILDMITTE und vergrößert die Canvas automatisch, damit nichts abgeschnitten wird. Damit der
+  // Ankerpunkt trotzdem exakt auf scaleReferenceCrop landet, muss dessen Position mit derselben
+  // Rotationsmatrix um die alte Bildmitte mitgedreht und dann auf die neue (größere) Canvas-Mitte
+  // bezogen werden - sonst würde die Drehung das Motiv unbemerkt vom Ankerpunkt wegschieben.
+  if (calibration.rotationDeg) {
+    const rotated = await sharp(resized)
+      .rotate(calibration.rotationDeg, { background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png()
+      .toBuffer({ resolveWithObject: true });
+    const rad = (calibration.rotationDeg * Math.PI) / 180;
+    const dx = refCenterInFinalX - targetW / 2;
+    const dy = refCenterInFinalY - targetH / 2;
+    const dxRot = dx * Math.cos(rad) - dy * Math.sin(rad);
+    const dyRot = dx * Math.sin(rad) + dy * Math.cos(rad);
+    finalW = rotated.info.width;
+    finalH = rotated.info.height;
+    refCenterInFinalX = finalW / 2 + dxRot;
+    refCenterInFinalY = finalH / 2 + dyRot;
+    finalLayer = rotated.data;
+  }
 
   const anchorX = Math.round((calibration.anchorXPercent / 100) * baseW);
   const anchorY = Math.round((calibration.anchorYPercent / 100) * baseH);
-  const pasteLeft = Math.round(anchorX - refCenterInResizedX);
-  const pasteTop = Math.round(anchorY - refCenterInResizedY);
+  const pasteLeft = Math.round(anchorX - refCenterInFinalX);
+  const pasteTop = Math.round(anchorY - refCenterInFinalY);
+
+  // Weicher Kontaktschatten (reine Bildmathematik, keine KI): Silhouette des Motivs, geschwärzt,
+  // etwas nach unten/rechts versetzt (passend zum etablierten "warmes Licht von links oben"-Look,
+  // siehe SYSTEM_INSTRUCTIONS_BEFORE_CLOTHING in image-generation.ts) und weichgezeichnet, mit
+  // reduzierter Deckkraft. Versatz/Weichzeichnung bewusst proportional zur Motivgröße (nicht fest
+  // in Pixeln), damit es bei jeder Größe (17mm-Mindestgröße oder größer) wie ein echter, feiner
+  // Schatten wirkt statt wie ein fester Klecks. a=[0,0,0,x] auf RGB heißt "auf Schwarz
+  // multiplizieren" (Silhouette einfärben), b=0 addiert nichts dazu; die Alpha-Bande bleibt mit
+  // a=1 unverändert, nur zum Schluss per eigenem linear()-Aufruf auf ~35% Deckkraft reduziert.
+  const shadowOffset = Math.max(1, Math.round(finalH * 0.05));
+  const shadowBlur = Math.max(0.5, finalH * 0.04);
+  const shadow = await sharp(finalLayer)
+    .ensureAlpha()
+    .linear(
+      [0, 0, 0, 1],
+      [0, 0, 0, 0],
+    )
+    .blur(shadowBlur)
+    .linear([1, 1, 1, 0.35], [0, 0, 0, 0])
+    .png()
+    .toBuffer();
 
   return sharp(baseBuffer)
-    .composite([{ input: resized, left: pasteLeft, top: pasteTop }])
+    .composite([
+      { input: shadow, left: pasteLeft, top: pasteTop + shadowOffset },
+      { input: finalLayer, left: pasteLeft, top: pasteTop },
+    ])
     .png()
     .toBuffer();
 }
