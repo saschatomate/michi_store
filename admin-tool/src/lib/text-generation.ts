@@ -163,3 +163,62 @@ export async function generateProductContent(product: SourceProductRow): Promise
 
   return parsed;
 }
+
+// Kurze, gezielte Vision-Analyse NUR der Kette (nicht des Anhängers) im echten Produktfoto - liefert
+// eine deutsche Kurzbeschreibung (Gliederart/Dicke/Finish), die in den Ketten-Generierungs-Prompt von
+// generateChainViaMask() (image-compositing.ts) einfließt, damit die KI-generierte Kette dem echten
+// Produkt ähnelt statt geraten zu werden. Diamond-Group liefert dafür keine strukturierten Metadaten
+// (langBezeichnungDe hat nur H/B/L/S in mm/cm, keine Gliederart) - der einzige Weg, die tatsächliche
+// Kette zu kennen, ist ein Blick auf das Foto selbst.
+//
+// BEWUSST eine separate reine Text-Antwort (kein Bild-Output), nicht das Produktfoto direkt in
+// generateChainViaMask() geben: ein früherer Versuch, das Produktfoto dort als zweites Bild
+// anzuhängen, hat gpt-image-1.5 dazu gebracht, nicht nur die Kette zu übernehmen, sondern die
+// komplette Bildkomposition zu verwerfen (Pose/Gesicht/Hintergrund neu generiert, siehe Kommentar
+// dort). Diese Funktion berührt den riskanten Bild-Editier-Aufruf gar nicht - nur ein kurzer, klar
+// abgegrenzter Textsatz geht anschließend in dessen Prompt ein, das eigentliche Ketten-Bild bleibt
+// weiterhin ohne Produktfoto-Referenz.
+export async function describeChainForImagePrompt(
+  productImageBuffer: Buffer,
+  mimeType: "image/jpeg" | "image/png" | "image/webp",
+  sourceProductId: number,
+): Promise<string | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  const client = new Anthropic({ apiKey });
+  const response = await client.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 300,
+    system:
+      "Du beschreibst NUR die Kette (nicht den Anhänger/die Fassung/die Steine) eines " +
+      "Schmuckstück-Produktfotos in einem einzigen kurzen, prägnanten deutschen Satz, geeignet als " +
+      "Stilvorgabe für eine Bildgenerierung: Gliederart (z.B. Anker-, Venezianer-, Figaro-, Panzer-, " +
+      "Kugelkette), ungefähre Gliedform/-größe und Oberflächenfinish (poliert/matt/diamantiert). " +
+      "Falls keine Kette erkennbar ist (z.B. reines Ring-/Ohrschmuckfoto), antworte NUR mit dem Wort " +
+      "'unklar'. Keine Einleitung, keine Erklärung, nur der eine Satz bzw. das eine Wort.",
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: mimeType, data: productImageBuffer.toString("base64") } },
+          { type: "text", text: "Beschreibe die Kette in diesem Produktfoto." },
+        ],
+      },
+    ],
+  });
+
+  await recordApiUsage({
+    provider: "anthropic",
+    purpose: "text_generation",
+    sourceProductId,
+    model: CLAUDE_MODEL,
+    usage: response.usage,
+    costUsd: estimateClaudeTextCost(CLAUDE_MODEL, response.usage),
+  });
+
+  const textBlock = response.content.find((block) => block.type === "text");
+  const description = textBlock && textBlock.type === "text" ? textBlock.text.trim() : "";
+  if (!description || description.toLowerCase().includes("unklar")) return null;
+  return description;
+}

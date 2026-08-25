@@ -2,8 +2,9 @@ import "server-only";
 import OpenAI, { toFile } from "openai";
 import type { sourceProducts } from "@/db/schema";
 import type { MarinellModel, PoseVariant } from "@/lib/image-facts";
-import { motifSizeMm, referenceImageUrl, fetchImageBuffer } from "@/lib/image-generation";
+import { motifSizeMm, referenceImageUrl, fetchImageBuffer, guessMimeType } from "@/lib/image-generation";
 import { estimateOpenAiImageCost, recordApiUsage } from "@/lib/cost-tracking";
+import { describeChainForImagePrompt } from "@/lib/text-generation";
 
 type SourceProductRow = typeof sourceProducts.$inferSelect;
 
@@ -108,380 +109,314 @@ export type PoseCalibration = {
 //
 // chainLeftAnchor/chainRightAnchor sind erste Schätzungen (per Augenmaß aus den Basisfotos
 // abgelesen, nicht exakt ausgemessen) - nach Sichtprüfung ggf. nachjustieren.
+// REKALIBRIERUNG (v2, alle 36 Kombis): der komplette bisherige Basisfoto-Bestand (baseImageUrl
+// oben) wurde mit client.images.generate() erzeugt - reinem Text-zu-Bild OHNE das echte
+// Model-Referenzfoto anzuhängen, anders als der klassische Produktfoto-Weg
+// (generateProductImageVariant() hängt das Referenzfoto IMMER an). Ergebnis: sichtbare Abweichung
+// vom echten Model in allen 4 weiblichen Models (Claire/Amara am deutlichsten). Fix bewiesen:
+// Testgenerierung mit images.edit() + Referenzfoto zeigt deutlich bessere Übereinstimmung (Licht,
+// Gesichtsform). Alle 36 Basisfotos (4 Models × 3 Kategorien × 3 Posen) wurden daraufhin mit dem
+// referenzfoto-gestützten Weg neu generiert und unter NEUEN Pfaden (Suffix "-v2") hochgeladen -
+// die alten Fotos bleiben unter ihren ursprünglichen Pfaden im Storage erhalten (kein Overwrite),
+// falls sie später nochmal gebraucht werden. Jeder einzelne Anker wurde komplett neu vermessen
+// (nicht von den alten Werten übernommen) - eine Anfangs-Direktübernahme der alten Ring-Ankerwerte
+// für 5 der 12 Kombis erwies sich bei genauer Prüfung (echte Pixel-Gridlines statt grober
+// 0.7x-Übersicht) in 4 von 5 Fällen als daneben, weil sich Kopf-/Handposition zwischen alter und
+// neuer Generierung leicht verschiebt - jede Kombi wurde daher einzeln per Grid-Overlay
+// nachgemessen und per Crosshair-Overlay visuell verifiziert. Colliers-Anker (Anhänger-Position +
+// Ketten-Anker) waren die Ausnahme: die alten Prozent-Werte trafen nach Sichtprüfung an den neuen
+// Fotos direkt (gleiches Framing/gleiche Pose-Vorgabe), nur pxPerMm wurde über den Pupillenabstand
+// neu gemessen (deutlich höher als der alte gemeinsame Wert 2.76 - die neuen Fotos zoomen enger
+// aufs Gesicht - und streut anders als früher spürbar pro Model, daher pro Model statt gemeinsam
+// gehalten). Ring/Ohrschmuck-pxPerMm unverändert von den alten Werten übernommen (weiterhin
+// plausible Schätzung ohne verlässliche Anatomie-Konstante, siehe ursprüngliche Begründung unten).
 export const POSE_CALIBRATIONS: Record<string, PoseCalibration> = {
   "sophia:frontal:Colliers": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-frontal-hals.png",
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-frontal-hals-v2.png",
     anchorXPercent: 50,
     anchorYPercent: 64,
-    pxPerMm: 2.76,
+    pxPerMm: 3.05,
     chainLeftAnchor: { xPercent: 33, yPercent: 52 },
     chainRightAnchor: { xPercent: 67, yPercent: 52 },
     referenceChainLengthCm: 45.7,
   },
   "sophia:dreiviertelprofil:Colliers": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-dreiviertelprofil-hals.png",
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-dreiviertelprofil-hals-v2.png",
     anchorXPercent: 52,
     anchorYPercent: 63,
-    pxPerMm: 2.76,
+    pxPerMm: 3.05,
     chainLeftAnchor: { xPercent: 36, yPercent: 50 },
     chainRightAnchor: { xPercent: 70, yPercent: 52 },
     referenceChainLengthCm: 45.7,
   },
   "sophia:seitlich:Colliers": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-seitlich-hals.png",
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-seitlich-hals-v2.png",
     anchorXPercent: 48,
     anchorYPercent: 62,
-    pxPerMm: 2.76,
+    pxPerMm: 3.05,
     chainLeftAnchor: { xPercent: 30, yPercent: 48 },
     chainRightAnchor: { xPercent: 66, yPercent: 50 },
     referenceChainLengthCm: 45.7,
   },
-  // Zweites Model für Colliers (erster Schritt der Model-Achse der Erweiterung) - Basisfoto per
-  // grid-overlay auf Pupillenabstand (63mm) kalibriert: pxPerMm ergibt sich (zufällig, aber
-  // plausibel, da identisches Prompt-Framing/Auflösung wie bei Sophia) zum selben Wert 2.76.
   "claire:frontal:Colliers": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-frontal-hals.png",
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-frontal-hals-v2.png",
     anchorXPercent: 48,
     anchorYPercent: 64,
-    pxPerMm: 2.76,
+    pxPerMm: 3.69,
     chainLeftAnchor: { xPercent: 31, yPercent: 52 },
     chainRightAnchor: { xPercent: 65, yPercent: 52 },
     referenceChainLengthCm: 45.7,
   },
-  // Claire komplettiert (die übrigen 2 von 3 Posen) - ohne diese hätte die UI "Compositing" für
-  // Claire zwar angeboten, wäre aber bei genau diesen beiden Posen mit einem Fehler abgebrochen
-  // (siehe compositeJewelryVariant()). anchorYPercent weicht hier bewusst von Sophias Werten ab
-  // (53%/55% statt 63%/62%) - das jeweilige Basisfoto ist etwas weniger eng zugeschnitten
-  // (mehr Oberkörper sichtbar), per Grid-Overlay am tatsächlichen Foto nachgemessen statt von
-  // Sophia übernommen.
   "claire:dreiviertelprofil:Colliers": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-dreiviertelprofil-hals.png",
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-dreiviertelprofil-hals-v2.png",
     anchorXPercent: 46,
     anchorYPercent: 53,
-    pxPerMm: 2.76,
+    pxPerMm: 3.69,
     chainLeftAnchor: { xPercent: 39, yPercent: 44 },
     chainRightAnchor: { xPercent: 74, yPercent: 44 },
     referenceChainLengthCm: 45.7,
   },
   "claire:seitlich:Colliers": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-seitlich-hals.png",
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-seitlich-hals-v2.png",
     anchorXPercent: 56,
     anchorYPercent: 55,
-    pxPerMm: 2.76,
+    pxPerMm: 3.69,
     chainLeftAnchor: { xPercent: 27, yPercent: 49 },
     chainRightAnchor: { xPercent: 81, yPercent: 48 },
     referenceChainLengthCm: 45.7,
   },
-  // Drittes Model für Colliers - alle 3 Posen direkt zusammen kalibriert. Jens Bob-Frisur (kurz,
-  // fällt seitlich am Gesicht statt über den Hals wie bei Sophia/Claire) macht den Hals in allen 3
-  // Posen durchgängig gut sichtbar - Ketten-Anker liegen deshalb tendenziell etwas symmetrischer.
   "jen:frontal:Colliers": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-frontal-hals.png",
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-frontal-hals-v2.png",
     anchorXPercent: 49,
     anchorYPercent: 57,
-    pxPerMm: 2.76,
+    pxPerMm: 3.59,
     chainLeftAnchor: { xPercent: 29, yPercent: 47 },
     chainRightAnchor: { xPercent: 68, yPercent: 47 },
     referenceChainLengthCm: 45.7,
   },
   "jen:dreiviertelprofil:Colliers": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-dreiviertelprofil-hals.png",
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-dreiviertelprofil-hals-v2.png",
     anchorXPercent: 54,
     anchorYPercent: 60,
-    pxPerMm: 2.76,
+    pxPerMm: 3.59,
     chainLeftAnchor: { xPercent: 27, yPercent: 49 },
     chainRightAnchor: { xPercent: 76, yPercent: 49 },
     referenceChainLengthCm: 45.7,
   },
   "jen:seitlich:Colliers": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-seitlich-hals.png",
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-seitlich-hals-v2.png",
     anchorXPercent: 45,
     anchorYPercent: 60,
-    pxPerMm: 2.76,
+    pxPerMm: 3.59,
     chainLeftAnchor: { xPercent: 24, yPercent: 49 },
     chainRightAnchor: { xPercent: 73, yPercent: 49 },
     referenceChainLengthCm: 45.7,
   },
-  // Viertes und letztes weibliches Model für Colliers (alle 4 aus der weiblichen Model-DNA jetzt
-  // komplett). Amaras Locken sind für dieses Referenzfoto bewusst zurückgestylt (hoher Zopf/Dutt,
-  // s. Prompt) statt offen wie sonst beschrieben - sonst wäre der Hals durch das voluminöse Haar
-  // verdeckt gewesen. Dadurch liegt der Hals in allen 3 Posen vollständig frei, Ketten-Anker
-  // brauchen hier (anders als bei offenen Frisuren) keine "verschwindet im Haar"-Logik, sondern
-  // markieren einfach den sichtbaren Halsrand auf Kieferhöhe.
   "amara:frontal:Colliers": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-frontal-hals.png",
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-frontal-hals-v2.png",
     anchorXPercent: 51,
     anchorYPercent: 61,
-    pxPerMm: 2.76,
+    pxPerMm: 3.5,
     chainLeftAnchor: { xPercent: 29, yPercent: 42 },
     chainRightAnchor: { xPercent: 73, yPercent: 42 },
     referenceChainLengthCm: 45.7,
   },
   "amara:dreiviertelprofil:Colliers": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-dreiviertelprofil-hals.png",
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-dreiviertelprofil-hals-v2.png",
     anchorXPercent: 52,
     anchorYPercent: 59,
-    pxPerMm: 2.76,
+    pxPerMm: 3.5,
     chainLeftAnchor: { xPercent: 27, yPercent: 42 },
     chainRightAnchor: { xPercent: 68, yPercent: 42 },
     referenceChainLengthCm: 45.7,
   },
   "amara:seitlich:Colliers": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-seitlich-hals.png",
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-seitlich-hals-v2.png",
     anchorXPercent: 45,
     anchorYPercent: 61,
-    pxPerMm: 2.76,
+    pxPerMm: 3.5,
     chainLeftAnchor: { xPercent: 27, yPercent: 46 },
     chainRightAnchor: { xPercent: 64, yPercent: 46 },
     referenceChainLengthCm: 45.7,
   },
-  // Erster Schritt der KATEGORIE-Achse der Erweiterung: Ring statt Colliers - andere Körperpartie
-  // (Hand statt Hals), deshalb kein chainLeftAnchor/-RightAnchor (kein Ketten-Problem bei einem
-  // Ring). compositeJewelryVariant() fällt dadurch automatisch auf den reinen Mathematik-Pfad
-  // zurück (kein KI-Aufruf, kostenlos) - siehe dortige Fallback-Logik. Ankerpunkt = Mitte des
-  // Ringfinger-Grundglieds (proximale Phalanx), per Grid-Overlay abgelesen; pxPerMm über die
-  // Nagellänge des Ringfingers geschätzt (~18mm, Standardwert), NICHT über den Pupillenabstand
-  // (auf diesem Foto ist kein Gesicht in Nahaufnahme sichtbar) - deutlich unsicherer als die
-  // Pupillen-Kalibrierung bei den Hals-Posen, nach erstem Test-Rendering ggf. nachjustieren.
   "sophia:frontal:Ring": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-frontal-ring.png",
-    anchorXPercent: 62,
-    anchorYPercent: 49.5,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-frontal-ring-v2.png",
+    anchorXPercent: 77.9,
+    anchorYPercent: 48.5,
     pxPerMm: 2.9,
   },
-  // Ring komplettiert (die übrigen 2 von 3 Posen) - gleicher Grund wie bei Claire/Colliers: ohne
-  // diese hätte die UI "Compositing" für Ring angeboten, wäre aber bei 2 von 3 Posen mit einem
-  // Fehler abgebrochen. Die erste dreiviertelprofil-Aufnahme wurde verworfen und neu generiert -
-  // die KI hatte die Finger an die Wange gekrümmt statt flach gestreckt, was die Ringfinger-
-  // Zuordnung unzuverlässig gemacht hätte (siehe compositionHint in image-facts.ts: "NICHT
-  // gekrümmt"). pxPerMm über alle 3 Posen konsistent auf 2.9 gehalten (Mittelwert aus einzeln pro
-  // Foto über die Nagellänge geschätzten 2.7-3.1) statt pro Foto zu variieren - gleiche Begründung
-  // wie bei den Hals-Posen: ein Produkt soll über seine 3 Varianten hinweg nicht sichtbar die
-  // Größe wechseln.
   "sophia:dreiviertelprofil:Ring": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-dreiviertelprofil-ring.png",
-    anchorXPercent: 65,
-    anchorYPercent: 64,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-dreiviertelprofil-ring-v2.png",
+    anchorXPercent: 77.2,
+    anchorYPercent: 39.2,
     pxPerMm: 2.9,
   },
   "sophia:seitlich:Ring": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-seitlich-ring.png",
-    anchorXPercent: 78,
-    anchorYPercent: 62,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-seitlich-ring-v2.png",
+    anchorXPercent: 47.5,
+    anchorYPercent: 28.1,
     pxPerMm: 2.9,
   },
-  // Zweite neue Kategorie: Ohrschmuck (Ohr statt Hand) - alle 3 Posen direkt zusammen kalibriert
-  // (Lehre aus Claire/Ring: nicht erst 1 Pose und die Lücke später schließen). Kein
-  // chainLeftAnchor/-RightAnchor (kein Ketten-Problem), also wieder der kostenlose Mathematik-Pfad.
-  // pxPerMm HIER bewusst NICHT über Pupillenabstand ermittelt (anders als bei den Hals-Posen) und
-  // auch NICHT über alle 3 Posen hinweg wiederverwendet: alle 3 Ohr-Fotos brauchen zwangsläufig
-  // einen gedrehten Kopf (frontal ist ein Ohr nicht sichtbar) - der scheinbare Pupillenabstand wäre
-  // also in JEDER Pose unterschiedlich stark perspektivisch verzerrt, eine "Referenzpose" gibt es
-  // hier nicht. Stattdessen: Ohrlänge (Helix-Oberkante bis Läppchen-Unterkante), Ø 63mm beim
-  // Erwachsenen - wird lokal AM Ohr selbst gemessen, direkt in der Bildebene, weitgehend unabhängig
-  // von der Kopfdrehung um die Hochachse. Ergebnis schwankt zwischen den 3 Fotos (2.63-3.08) stärker
-  // als bei den anderen Kategorien - vermutlich eher Messungenauigkeit an der weichen, konturarmen
-  // Ohrform als ein echter Größenunterschied; deshalb bewusst PRO Foto einzeln gemessen statt einen
-  // Wert zu erzwingen. Ankerpunkt = Mitte des Ohrläppchens (wo ein Ohrstecker/-hänger ansetzt).
   "sophia:frontal:Ohrschmuck": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-frontal-ohr.png",
-    anchorXPercent: 63,
-    anchorYPercent: 39,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-frontal-ohr-v2.png",
+    anchorXPercent: 64.3,
+    anchorYPercent: 27.7,
     pxPerMm: 3.08,
   },
   "sophia:dreiviertelprofil:Ohrschmuck": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-dreiviertelprofil-ohr.png",
-    anchorXPercent: 62,
-    anchorYPercent: 35,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-dreiviertelprofil-ohr-v2.png",
+    anchorXPercent: 53.2,
+    anchorYPercent: 22.5,
     pxPerMm: 2.63,
   },
   "sophia:seitlich:Ohrschmuck": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-seitlich-ohr.png",
-    anchorXPercent: 57,
-    anchorYPercent: 38,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-seitlich-ohr-v2.png",
+    anchorXPercent: 49.3,
+    anchorYPercent: 22.8,
     pxPerMm: 2.68,
   },
-  // Claire ergänzt für Ring und Ohrschmuck (alle 3 Posen je Kategorie zusammen). Bei den Ring-
-  // Fotos lagen die Finger enger/leicht überlappend statt klar gespreizt wie bei Sophias Fotos -
-  // die Ringfinger-Zuordnung ist hier dadurch unsicherer (weniger klar abgrenzbare Nägel je Foto);
-  // nach dem Test-Rendering nochmal gegenprüfen.
   "claire:frontal:Ring": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-frontal-ring.png",
-    anchorXPercent: 68,
-    anchorYPercent: 63,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-frontal-ring-v2.png",
+    anchorXPercent: 68.1,
+    anchorYPercent: 56.9,
     pxPerMm: 2.7,
   },
   "claire:dreiviertelprofil:Ring": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-dreiviertelprofil-ring.png",
-    anchorXPercent: 52,
-    anchorYPercent: 63,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-dreiviertelprofil-ring-v2.png",
+    anchorXPercent: 63.4,
+    anchorYPercent: 55.5,
     pxPerMm: 2.7,
   },
   "claire:seitlich:Ring": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-seitlich-ring.png",
-    anchorXPercent: 56,
-    anchorYPercent: 56,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-seitlich-ring-v2.png",
+    anchorXPercent: 65.2,
+    anchorYPercent: 52.9,
     pxPerMm: 2.7,
   },
-  // KORREKTUR (Remeasure): Die ursprünglichen Werte hier waren fehlerhaft - der Ohrring landete
-  // sichtbar zu weit vorne/oben auf Wange/Kieferlinie statt auf dem Ohrläppchen (Test mit 2G386W8).
-  // Direkter Bildvergleich (identischer Crop-Ausschnitt) zeigt: Claires und Sophias Ohr-Fotos sind
-  // in allen 3 Posen praktisch deckungsgleich geframt (gleiche Ohrgröße, gleiche Kopfposition) -
-  // Sophias verifizierter Anker (gleiche Pose) trifft bei Claire exakt denselben anatomischen Punkt
-  // (Tragus/Läppchen-Übergang). Deshalb hier bewusst Sophias Werte 1:1 übernommen statt neu (und
-  // wieder fehleranfällig) am weichen, konturarmen Ohr zu messen.
   "claire:frontal:Ohrschmuck": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-frontal-ohr.png",
-    anchorXPercent: 63,
-    anchorYPercent: 39,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-frontal-ohr-v2.png",
+    anchorXPercent: 30.3,
+    anchorYPercent: 29.9,
     pxPerMm: 3.08,
   },
   "claire:dreiviertelprofil:Ohrschmuck": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-dreiviertelprofil-ohr.png",
-    anchorXPercent: 62,
-    anchorYPercent: 35,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-dreiviertelprofil-ohr-v2.png",
+    anchorXPercent: 35.6,
+    anchorYPercent: 27.7,
     pxPerMm: 2.63,
   },
   "claire:seitlich:Ohrschmuck": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-seitlich-ohr.png",
-    anchorXPercent: 57,
-    anchorYPercent: 38,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-seitlich-ohr-v2.png",
+    anchorXPercent: 36.1,
+    anchorYPercent: 28.3,
     pxPerMm: 2.68,
   },
-  // Jen ergänzt für Ring und Ohrschmuck (dritte Model, alle 3 Posen je Kategorie zusammen).
-  // WICHTIGER Zwischenfall bei der Ring-Generierung: die ersten Versuche für frontal/
-  // dreiviertelprofil haben trotz expliziter "KEIN Schmuck jeglicher Art"-Anweisung im Prompt
-  // TROTZDEM einen Ring auf die Hand gerendert - die visuelle Assoziation "elegante Hand nahe
-  // Schlüsselbein/Kinn = Verlobungsring-Foto" hat die Anweisung offenbar überstimmt. Fix: beide
-  // Fotos mit einer zusätzlich vorangestellten, mehrfach wiederholten "AUSDRÜCKLICH KEIN Ring"-
-  // Klausel neu generiert (seitlich war beim ersten Versuch bereits schmucklos, musste aber aus
-  // einem anderen Grund neu generiert werden - siehe unten). Bei jeder neuen Model/Kategorie-
-  // Kombination mit "Hand nahe Gesicht"-Posen also aktiv gegenprüfen, nicht nur auf die Prompt-
-  // Klausel vertrauen. Der Direktvergleich-Trick von Claire/Ohrschmuck (Sophias verifizierten
-  // Anker übertragen) hat hier NICHT funktioniert - Jens Kopf/Ohr sitzt wegen der anderen Frisur
-  // (kurzer Bob statt langer Wellen) sichtbar anders im Bildausschnitt; alle 6 Anker deshalb neu
-  // per Grid-Overlay direkt an Jens eigenen Fotos gemessen. pxPerMm mangels verlässlicher
-  // Anatomie-Konstante (Ring) bzw. wegen haarbedecktem Helix-Ansatz (Ohrschmuck) auf plausible
-  // Schätzwerte im selben Bereich wie Sophia/Claire gesetzt, nach Test-Rendering zu verifizieren.
   "jen:frontal:Ring": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-frontal-ring.png",
-    anchorXPercent: 54,
-    anchorYPercent: 62,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-frontal-ring-v2.png",
+    anchorXPercent: 68.7,
+    anchorYPercent: 53.7,
     pxPerMm: 2.8,
   },
   "jen:dreiviertelprofil:Ring": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-dreiviertelprofil-ring.png",
-    anchorXPercent: 47,
-    anchorYPercent: 60,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-dreiviertelprofil-ring-v2.png",
+    anchorXPercent: 68.7,
+    anchorYPercent: 46.9,
     pxPerMm: 2.8,
   },
-  // Seitlich musste separat neu generiert werden: der erste Versuch zeigte nur eine einzelne
-  // angedeutete Fingerspitze am Kinn statt einer klar erkennbaren, gespreizten Hand (Finger zu
-  // stark eingerollt für eine zuverlässige Ringfinger-Zuordnung) - mit einer verstärkten, expliziten
-  // "flache Hand auf dem Schlüsselbein"-Anweisung neu generiert (analog zu Claires Referenzpose).
   "jen:seitlich:Ring": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-seitlich-ring.png",
-    anchorXPercent: 73,
-    anchorYPercent: 66,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-seitlich-ring-v2.png",
+    anchorXPercent: 63.0,
+    anchorYPercent: 35.4,
     pxPerMm: 2.8,
   },
   "jen:frontal:Ohrschmuck": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-frontal-ohr.png",
-    anchorXPercent: 75,
-    anchorYPercent: 39,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-frontal-ohr-v2.png",
+    anchorXPercent: 78.1,
+    anchorYPercent: 27.7,
     pxPerMm: 3.0,
   },
   "jen:dreiviertelprofil:Ohrschmuck": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-dreiviertelprofil-ohr.png",
-    anchorXPercent: 70,
-    anchorYPercent: 34,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-dreiviertelprofil-ohr-v2.png",
+    anchorXPercent: 64.9,
+    anchorYPercent: 26.4,
     pxPerMm: 2.8,
   },
   "jen:seitlich:Ohrschmuck": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-seitlich-ohr.png",
-    anchorXPercent: 72,
-    anchorYPercent: 34,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-seitlich-ohr-v2.png",
+    anchorXPercent: 69.8,
+    anchorYPercent: 26.4,
     pxPerMm: 2.8,
   },
-  // Amara ergänzt für Ring und Ohrschmuck (viertes und letztes weibliches Model, alle 3 Posen je
-  // Kategorie zusammen). Lehren aus Jen von Anfang an eingebaut: verstärkte "AUSDRÜCKLICH KEIN
-  // Ring"-Klausel im Prompt (trotzdem einmal ein winziger Ohrstecker auf dem RING-Foto durchgerutscht
-  // - dort irrelevant, da nur die Hand ausgewertet wird, aber ein Beleg dass die Klausel keine
-  // 100%-Garantie ist) sowie explizite "ganze Hand flach, alle 4 Finger sichtbar gespreizt"-Vorgabe
-  // - alle 6 Fotos beim ersten Versuch brauchbar, keine Neugenerierung nötig. Alle 3 Ohrschmuck-
-  // Fotos gegengeprüft: kein Schmuck am Ohr sichtbar (nur ein harmloses Muttermal auf 2 der 3
-  // Fotos). Anker wie immer per Grid-Overlay direkt gemessen (kein Direktvergleich-Trick möglich,
-  // andere Frisur/Kopfposition als Sophia/Claire).
   "amara:frontal:Ring": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-frontal-ring.png",
-    anchorXPercent: 64,
-    anchorYPercent: 65,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-frontal-ring-v2.png",
+    anchorXPercent: 73.3,
+    anchorYPercent: 62.0,
     pxPerMm: 2.8,
   },
   "amara:dreiviertelprofil:Ring": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-dreiviertelprofil-ring.png",
-    anchorXPercent: 66,
-    anchorYPercent: 57,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-dreiviertelprofil-ring-v2.png",
+    anchorXPercent: 68.8,
+    anchorYPercent: 51.1,
     pxPerMm: 2.8,
   },
   "amara:seitlich:Ring": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-seitlich-ring.png",
-    anchorXPercent: 68,
-    anchorYPercent: 42,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-seitlich-ring-v2.png",
+    anchorXPercent: 60.1,
+    anchorYPercent: 44.1,
     pxPerMm: 2.8,
   },
   "amara:frontal:Ohrschmuck": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-frontal-ohr.png",
-    anchorXPercent: 74,
-    anchorYPercent: 37,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-frontal-ohr-v2.png",
+    anchorXPercent: 67.4,
+    anchorYPercent: 26.0,
     pxPerMm: 2.9,
   },
   "amara:dreiviertelprofil:Ohrschmuck": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-dreiviertelprofil-ohr.png",
-    anchorXPercent: 68,
-    anchorYPercent: 39,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-dreiviertelprofil-ohr-v2.png",
+    anchorXPercent: 66.9,
+    anchorYPercent: 26.0,
     pxPerMm: 2.8,
   },
   "amara:seitlich:Ohrschmuck": {
     baseImageUrl:
-      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-seitlich-ohr.png",
-    anchorXPercent: 63,
-    anchorYPercent: 30,
+      "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-seitlich-ohr-v2.png",
+    anchorXPercent: 63.5,
+    anchorYPercent: 25.4,
     pxPerMm: 2.8,
   },
 };
@@ -803,6 +738,29 @@ export async function compositeRaw(
   // nur Ring.
   const resizedPendant = await sharp(cropped).resize(targetW, targetH).sharpen({ sigma: 1 }).png().toBuffer();
 
+  // Licht-/Farbangleichung ans Foto (Nutzer-Feedback 2026-08-25): das Produktfoto ist eine flach/
+  // hell ausgeleuchtete Studio-Freistelleraufnahme (harte Facetten-Schwarz/Weiß-Kontraste, neutral-
+  // kühler Weißabgleich) - unverändert eingesetzt wirkt der Anhänger/Ring/Ohrring im direkten
+  // Vergleich zum weich/warm beleuchteten Model-Foto ("Golden Hour", siehe
+  // SYSTEM_INSTRUCTIONS_BEFORE_CLOTHING in image-generation.ts) zu kräftig/aufgesetzt statt vom
+  // selben Licht getroffen. Feste, bewusst zurückhaltende Korrektur (kein Re-Lighting, keine
+  // Verwischung) statt eines KI-Schritts: Kontrastspanne leicht zurückgenommen (a<1, hebt Tiefen an/
+  // senkt Lichter ab) plus warmer Versatz (b: mehr Rot/Grün, kaum Blau) und minimal reduzierte
+  // Sättigung. NUR auf die RGB-Kanäle angewendet (removeAlpha()/joinChannel() davor/danach) - würde
+  // man die Maske selbst mit anfassen, bekäme der eigentlich transparente Freisteller-Hintergrund
+  // einen sichtbaren Schleier statt unverändert transparent zu bleiben.
+  const pendantAlpha = await sharp(resizedPendant).ensureAlpha().extractChannel(3).raw().toBuffer();
+  const gradedRgb = await sharp(resizedPendant)
+    .removeAlpha()
+    .modulate({ saturation: 0.85 })
+    .linear([0.8, 0.8, 0.76], [22, 13, 3])
+    .png()
+    .toBuffer();
+  const litPendant = await sharp(gradedRgb)
+    .joinChannel(pendantAlpha, { raw: { width: targetW, height: targetH, channels: 1 } })
+    .png()
+    .toBuffer();
+
   const anchorX = Math.round((calibration.anchorXPercent / 100) * baseW);
   const anchorY = Math.round((adjustedAnchorYPercent(calibration, chainLengthCm, baseH) / 100) * baseH);
   const pasteLeft = Math.round(anchorX - targetW / 2);
@@ -826,7 +784,7 @@ export async function compositeRaw(
   const buffer = await sharp(baseBuffer)
     .composite([
       { input: shadow, left: pasteLeft, top: pasteTop + shadowOffset },
-      { input: resizedPendant, left: pasteLeft, top: pasteTop },
+      { input: litPendant, left: pasteLeft, top: pasteTop },
     ])
     .png()
     .toBuffer();
@@ -885,11 +843,7 @@ async function buildChainMask(
 }
 
 // Einziger KI-Aufruf in diesem Pfad: generiert NUR innerhalb des maskierten Korridors (siehe
-// buildChainMask()) eine Kette, die vom Hals zum bereits eingesetzten Anhänger führt. Nutzt das
-// echte Produktfoto als zweites Bild, damit Material/Farbe/Gliederform zum tatsächlichen
-// Schmuckstück passen, statt geraten zu werden. input_fidelity "high", damit sich die KI so nah wie
-// möglich am ersten Bild orientiert (Gegenteil des Problems beim klassischen Weg, wo "high" das
-// Produktfoto zu wörtlich als Größenvorlage nahm - hier ist "möglichst wenig verändern" das Ziel).
+// buildChainMask()) eine Kette, die vom Hals zum bereits eingesetzten Anhänger führt.
 //
 // WICHTIGER VORBEHALT (siehe Kommentar oben im Datei-Header): die Maske ist bei gpt-image-1.5 keine
 // harte Pixel-Garantie - ein Pixelvergleich zeigt leichte Abweichungen auch außerhalb des Korridors
@@ -902,25 +856,40 @@ async function buildChainMask(
 // generiert, in einem Fall sogar auf den TRANSPARENTEN Hintergrund des Produktfotos zurückgesetzt) -
 // es hat sich also nicht nur inhaltlich, sondern auch stilistisch am zweiten (posenlosen,
 // teils transparenten) Produktfoto orientiert, nicht nur an der Maske. Ohne zweites Bild bleibt die
-// Pose (Gesicht, Haare, Kleidung, Hintergrund) zuverlässig erhalten, Material/Farbe kommt jetzt
-// ausschließlich per Textbeschreibung (materialLabel).
+// Pose (Gesicht, Haare, Kleidung, Hintergrund) zuverlässig erhalten - Material/Farbe UND jetzt auch
+// die tatsächliche Gliederform kommen ausschließlich per Textbeschreibung rein: materialLabel
+// (Katalogdaten) plus chainStyleHint, eine separate Vision-Kurzbeschreibung DER ECHTEN KETTE aus dem
+// Produktfoto (siehe describeChainForImagePrompt() in text-generation.ts) - liefert die optische
+// Nähe zum echten Produkt, die vorher am zweiten Bild scheiterte, ohne dessen Risiko einzugehen.
+//
+// FUND 2026-08-25 (Nutzer-Feedback): die generierte Kette wirkte gegenüber dem Rest des Fotos zu
+// neutral/gleichmäßig beleuchtet statt in dessen warmem Golden-Hour-Licht - Prompt zitiert deshalb
+// jetzt explizit dieselbe Licht-Formulierung wie SYSTEM_INSTRUCTIONS_BEFORE_CLOTHING in
+// image-generation.ts (Lichtrichtung, Farbtemperatur, Kantenlicht), statt nur generisch "realistischer
+// Metallglanz" zu fordern.
 async function generateChainViaMask(
   pendantOnlyBuffer: Buffer,
   maskBuffer: Buffer,
   materialLabel: string | null,
+  chainStyleHint: string | null,
   apiKey: string,
 ): Promise<{ buffer: Buffer; usage: unknown }> {
   const materialHint = materialLabel ? ` aus ${materialLabel} (warmes Roségold)` : "";
+  const styleHint = chainStyleHint
+    ? ` Die Kette entspricht genau dieser Beschreibung des tatsächlichen Produkts: "${chainStyleHint}".`
+    : "";
   const prompt =
     "Kontext: professionelle E-Commerce-Schmuckfotografie, seriös, nicht sexualisiert. Zeichne NUR " +
     "im transparenten/editierbaren Bereich der Maske eine dünne, elegante Halskette (Ankerkette/" +
     `Cable-Kette)${materialHint}, die natürlich vom Hals kommend zu dem bereits vorhandenen ` +
-    "Anhänger führt und dort ansetzt, mit realistischem Metallglanz und feinen Lichtreflexen, " +
-    "keine übertriebene Dicke. KRITISCH: Das Ausgabebild muss EXAKT denselben Bildausschnitt, " +
-    "dieselbe Kopfhaltung, denselben Zoom/Crop und denselben Hintergrund wie das gegebene Bild " +
-    "behalten - vergrößere/verkleinere/beschneide NICHTS. Der Rest des Bildes (Gesicht, Haare, " +
-    "Kleidung, Hintergrund, der bereits platzierte Anhänger) ist durch die Maske geschützt - " +
-    "verändere dort nichts. Kein zusätzlicher Schmuck.";
+    `Anhänger führt und dort ansetzt, keine übertriebene Dicke.${styleHint} Beleuchtung der Kette ` +
+    "GENAU wie im Rest des Fotos: warmes 'Golden Hour'/Champagnerlicht, weiches Beauty-Light von " +
+    "links oben, warme Farbtemperatur, feines Kantenlicht auf dem Metall, sanfte Schatten - keine " +
+    "neutrale/kühle Studiobeleuchtung, keine eigene Lichtquelle für die Kette. KRITISCH: Das " +
+    "Ausgabebild muss EXAKT denselben Bildausschnitt, dieselbe Kopfhaltung, denselben Zoom/Crop und " +
+    "denselben Hintergrund wie das gegebene Bild behalten - vergrößere/verkleinere/beschneide " +
+    "NICHTS. Der Rest des Bildes (Gesicht, Haare, Kleidung, Hintergrund, der bereits platzierte " +
+    "Anhänger) ist durch die Maske geschützt - verändere dort nichts. Kein zusätzlicher Schmuck.";
 
   const [pendantFile, maskFile] = await Promise.all([
     toFile(pendantOnlyBuffer, "pendant-only", { type: "image/png" }),
@@ -1008,7 +977,26 @@ export async function compositeJewelryVariant(
   const mask = await buildChainMask(baseW, baseH, leftPoint, rightPoint, attachPoint);
 
   const materialLabel = [product.hauptmaterial, product.legierung].filter(Boolean).join(", ") || null;
-  const { buffer: withChain, usage } = await generateChainViaMask(pendantOnly, mask, materialLabel, apiKey);
+  // Reiner Text-Stilhinweis aus einer separaten Vision-Analyse des echten Produktfotos (siehe
+  // describeChainForImagePrompt()) - KEIN zweites Bild geht in generateChainViaMask() ein, das war
+  // bereits einmal die Ursache für eine verworfene Bildkomposition (siehe Kommentar dort). Darf
+  // scheitern/leer bleiben (fehlender API-Key, unklare Kette auf dem Foto) - die Ketten-Generierung
+  // fällt dann auf den bisherigen generischen Materialhinweis zurück statt abzubrechen.
+  const chainStyleHint = await describeChainForImagePrompt(
+    productBuffer,
+    guessMimeType(refUrl) as "image/jpeg" | "image/png" | "image/webp",
+    product.id,
+  ).catch((err) => {
+    console.error("[image-compositing] Ketten-Stilanalyse fehlgeschlagen, nutze generischen Hinweis:", err);
+    return null;
+  });
+  const { buffer: withChain, usage } = await generateChainViaMask(
+    pendantOnly,
+    mask,
+    materialLabel,
+    chainStyleHint,
+    apiKey,
+  );
 
   await recordApiUsage({
     provider: "openai",
