@@ -222,3 +222,68 @@ export async function describeChainForImagePrompt(
   if (!description || description.toLowerCase().includes("unklar")) return null;
   return description;
 }
+
+// Absicherung gegen das in image-compositing.ts dokumentierte Masken-Risiko: gpt-image-1.5 kann den
+// bereits korrekt platzierten Anhänger beim Ketten-Generierungsschritt sichtbar mit-überschreiben
+// oder schrumpfen lassen, obwohl er außerhalb der editierbaren Maske liegen sollte. Ein erster
+// Versuch, das über Bildstatistik zu erkennen (Kontrast-/Helligkeitsvergleich im exakten
+// Anhänger-Rechteck), wurde am 2026-08-25 an einem echten Vorfall (4P765G8) getestet und verworfen -
+// die Statistik-Werte für "intakt" und "sichtbar kaputt" lagen nicht zuverlässig auseinander, u.a.
+// weil Hautstruktur/Stoffgewebe zufällig ähnlichen lokalen Kontrast erzeugen wie echte Pavé-
+// Fassungen (siehe Kommentar bei pendantCheckWindow() in image-compositing.ts). Diese Funktion
+// ersetzt das durch eine echte inhaltliche Bildbeurteilung: Claude bekommt denselben (großzügig
+// zugeschnittenen, verschiebungstoleranten) Bildausschnitt einmal VOR und einmal NACH dem
+// Ketten-Schritt und beurteilt, ob dort noch ein vergleichbares Schmuckstück zu erkennen ist.
+//
+// Rückgabe: true = intakt, false = sichtbar beschädigt/verschwunden, null = Check selbst
+// fehlgeschlagen (kein API-Key, Netzwerkfehler, unklare Antwort) - der Aufrufer behandelt null wie
+// true ("fail open"), damit ein Claude-Ausfall nicht unnötig kostenpflichtige OpenAI-Wiederholungen
+// auslöst.
+export async function verifyPendantIntact(
+  beforeCropBuffer: Buffer,
+  afterCropBuffer: Buffer,
+  sourceProductId: number,
+): Promise<boolean | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  const client = new Anthropic({ apiKey });
+  const response = await client.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 60,
+    system:
+      "Du bekommst zwei Ausschnitte desselben Fotos (Schmuck auf Haut): Bild 1 VOR, Bild 2 NACH " +
+      "einem Bildbearbeitungsschritt, der nur eine Kette ergänzen sollte, sonst nichts verändern. " +
+      "Beurteile NUR: ist in Bild 2 noch ein vergleichbar großes, deutlich erkennbares Schmuckstück " +
+      "zu sehen (Position darf leicht abweichen) - oder wirkt es deutlich kleiner, verzerrt, " +
+      "undeutlich oder ist es verschwunden? Antworte NUR mit dem einen Wort 'INTAKT' oder " +
+      "'BESCHAEDIGT', keine weitere Erklärung.",
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Bild 1 (vorher):" },
+          { type: "image", source: { type: "base64", media_type: "image/png", data: beforeCropBuffer.toString("base64") } },
+          { type: "text", text: "Bild 2 (nachher):" },
+          { type: "image", source: { type: "base64", media_type: "image/png", data: afterCropBuffer.toString("base64") } },
+        ],
+      },
+    ],
+  });
+
+  await recordApiUsage({
+    provider: "anthropic",
+    purpose: "text_generation",
+    sourceProductId,
+    model: CLAUDE_MODEL,
+    usage: response.usage,
+    costUsd: estimateClaudeTextCost(CLAUDE_MODEL, response.usage),
+  });
+
+  const textBlock = response.content.find((block) => block.type === "text");
+  const verdict = textBlock && textBlock.type === "text" ? textBlock.text.trim().toUpperCase() : "";
+  if (verdict.includes("BESCHAEDIGT") || verdict.includes("BESCHÄDIGT")) return false;
+  if (verdict.includes("INTAKT")) return true;
+  // Unklare/unerwartete Antwort - lieber nicht fälschlich blockieren.
+  return null;
+}

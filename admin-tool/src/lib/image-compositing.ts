@@ -4,7 +4,7 @@ import type { sourceProducts } from "@/db/schema";
 import type { MarinellModel, PoseVariant } from "@/lib/image-facts";
 import { motifSizeMm, referenceImageUrl, fetchImageBuffer, guessMimeType } from "@/lib/image-generation";
 import { estimateOpenAiImageCost, recordApiUsage } from "@/lib/cost-tracking";
-import { describeChainForImagePrompt } from "@/lib/text-generation";
+import { describeChainForImagePrompt, verifyPendantIntact } from "@/lib/text-generation";
 
 type SourceProductRow = typeof sourceProducts.$inferSelect;
 
@@ -674,6 +674,17 @@ async function resolvePendantCrop(
 // (>=17mm, die ohnehin gut lesbar sind) bleiben unverändert in exakter Realgröße.
 const MIN_RENDER_MM = 17;
 
+// Fund 2026-08-26 (Nutzer-Report zu 4L938W8, ein 7x7mm-Anhänger): der reine feste mm-Floor oben
+// wurde nur für den 11mm-Referenzfall (4R267R8) kalibriert/freigegeben - bei 7mm ergibt derselbe
+// starre Floor (17mm) eine Vergrößerung um das 2,43-fache linear (≈5,9-fache Fläche), deutlich mehr
+// als die dort beabsichtigte "leichte" Vergrößerung, und wirkt entsprechend sichtbar überdimensioniert
+// ("doppelt so groß" laut Nutzer). MAX_RENDER_ENLARGEMENT_RATIO deckelt das Verhältnis
+// stattdessen auf exakt das am 11mm-Fall gebilligte Maß (17/11) - für alles ab 11mm ändert sich
+// dadurch NICHTS (bestätigt gegengerechnet gegen alle bisher verifizierten Testprodukte: 4R267R8/
+// 11mm, 1JX45W852/14mm, 2G386W8/15mm, 4P765G8/22mm bleiben exakt wie zuvor), nur Motive deutlich
+// unter 11mm werden jetzt proportional sanfter statt pauschal auf 17mm angehoben.
+const MAX_RENDER_ENLARGEMENT_RATIO = MIN_RENDER_MM / 11;
+
 // Ein Anhänger hängt an einer längeren Kette tiefer, an einer kürzeren höher - anchorYPercent ist
 // aber pro Pose auf GENAU EINE Referenzlänge kalibriert (referenceChainLengthCm, das Produkt, mit
 // dem der Ankerpunkt bestimmt wurde). Für andere Kettenlängen wird die Höhe proportional verschoben.
@@ -700,6 +711,13 @@ export type PendantPlacement = {
   buffer: Buffer;
   /** Oberer Mittelpunkt des eingesetzten Anhängers - Ansatzpunkt für die Kette (siehe unten). */
   attachPoint: { x: number; y: number };
+  /**
+   * Exaktes Pixel-Rechteck, in das der Anhänger eingesetzt wurde (im Basisfoto-Koordinatensystem).
+   * Wird von compositeJewelryVariant() nach dem KI-Kettenschritt gebraucht, um den Vision-Check
+   * (siehe verifyPendantIntact() in text-generation.ts, aufgerufen über pendantCheckWindow() hier)
+   * auf den richtigen Bildbereich einzugrenzen.
+   */
+  pasteRect: MotifCropOverride;
 };
 
 // Reine Bildmathematik (keine KI): setzt den Anhänger (pendantCrop) unverändert/aufrecht in
@@ -723,8 +741,11 @@ export async function compositeRaw(
 
   // Skalierungsfaktor: wie viel kleiner/größer muss pendantCrop werden, damit seine LÄNGERE Seite
   // effectiveMm * calibration.pxPerMm Pixel misst (motifMm bezieht sich auf die größere reale
-  // Abmessung, siehe motifSizeMm() in image-generation.ts; effectiveMm siehe MIN_RENDER_MM oben).
-  const effectiveMm = Math.max(motifMm, MIN_RENDER_MM);
+  // Abmessung, siehe motifSizeMm() in image-generation.ts; effectiveMm siehe MIN_RENDER_MM/
+  // MAX_RENDER_ENLARGEMENT_RATIO oben). Ab motifMm >= 11mm identisch zum reinen Max(…, 17)-Floor
+  // von vorher (siehe Herleitung dort), darunter proportional gedeckelt statt hart auf 17mm.
+  const effectiveMm =
+    motifMm >= MIN_RENDER_MM ? motifMm : Math.min(MIN_RENDER_MM, motifMm * MAX_RENDER_ENLARGEMENT_RATIO);
   const pendantLongerPx = Math.max(pendantCrop.width, pendantCrop.height);
   const targetLongerPx = effectiveMm * calibration.pxPerMm;
   const scaleFactor = targetLongerPx / pendantLongerPx;
@@ -789,8 +810,46 @@ export async function compositeRaw(
     .png()
     .toBuffer();
 
-  return { buffer, attachPoint: { x: anchorX, y: pasteTop } };
+  return {
+    buffer,
+    attachPoint: { x: anchorX, y: pasteTop },
+    pasteRect: { left: pasteLeft, top: pasteTop, width: targetW, height: targetH },
+  };
 }
+
+// Absicherung gegen das oben dokumentierte Risiko ("die Maske ist bei gpt-image-1.5 KEINE harte
+// Pixel-Garantie"): EIN VERWORFENER ERSTER ANSATZ (2026-08-25, siehe Git-Historie) hat versucht,
+// das rein über Bildstatistik zu erkennen (Graustufen-Kontrast/Helligkeitsfläche im exakten
+// Anhänger-Rechteck vorher/nachher). An den zwei bekannten echten Fällen von 4P765G8 (Frontal =
+// intakt, Dreiviertelprofil = sichtbar auf einen Bruchteil geschrumpft) lieferten DREI verschiedene
+// Statistik-Varianten widersprüchliche oder sogar verkehrte Ergebnisse - u.a. weil Hautstruktur/
+// Stoffgewebe/Kleidungs-Highlights zufällig ähnlichen lokalen Kontrast erzeugen wie echte Pavé-
+// Fassungen, UND weil sich herausstellte, dass die KI den Anhänger auch beim intakten Frontal-Fall
+// sichtbar verschiebt (nicht nur die Kette anpasst) - ein fester Pixel-Rechteck-Vergleich ist der
+// falsche Ansatz. Stattdessen: ein echter semantischer Vision-Check per Claude (siehe
+// verifyPendantIntact() in text-generation.ts) auf einem großzügig ausgeschnittenen Bereich um den
+// Ankerpunkt (toleriert Verschiebung), der inhaltlich beurteilt statt Pixel zu vergleichen.
+function pendantCheckWindow(
+  pasteRect: MotifCropOverride,
+  canvasWidth: number,
+  canvasHeight: number,
+): MotifCropOverride {
+  // Großzügig das 4-fache der Anhänger-Breite/Höhe als Rand in jede Richtung - deckt die in der
+  // Praxis beobachtete Verschiebung (siehe Kommentar oben) mit reichlich Puffer ab, bleibt aber
+  // klein genug, um nicht versehentlich Gesicht/Haare mit ins Bild zu bekommen.
+  const marginX = pasteRect.width * 4;
+  const marginY = pasteRect.height * 4;
+  const left = Math.max(0, pasteRect.left - marginX);
+  const top = Math.max(0, pasteRect.top - marginY);
+  const right = Math.min(canvasWidth, pasteRect.left + pasteRect.width + marginX);
+  const bottom = Math.min(canvasHeight, pasteRect.top + pasteRect.height + marginY);
+  return { left, top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) };
+}
+
+// Erster Versuch + maximal 2 Wiederholungen - jeder Versuch ist ein echter, kostenpflichtiger
+// OpenAI-Aufruf (plus ein günstiger Claude-Vision-Check), daher bewusst knapp gehalten statt
+// beliebig oft zu retryen.
+const MAX_CHAIN_ATTEMPTS = 3;
 
 // Breite des editierbaren Korridors (Pixel) für die maskierte Ketten-Generierung - großzügig genug,
 // damit die KI eine natürlich wirkende Kette zeichnen kann, ohne in den geschützten Bereich
@@ -944,7 +1003,7 @@ export async function compositeJewelryVariant(
   ]);
 
   const pendantCrop = await resolvePendantCrop(product, productBuffer);
-  const { buffer: pendantOnly, attachPoint } = await compositeRaw(
+  const { buffer: pendantOnly, attachPoint, pasteRect } = await compositeRaw(
     baseBuffer,
     productBuffer,
     motifMm,
@@ -990,26 +1049,66 @@ export async function compositeJewelryVariant(
     console.error("[image-compositing] Ketten-Stilanalyse fehlgeschlagen, nutze generischen Hinweis:", err);
     return null;
   });
-  const { buffer: withChain, usage } = await generateChainViaMask(
-    pendantOnly,
-    mask,
-    materialLabel,
-    chainStyleHint,
-    apiKey,
-  );
+  // Absicherung (Fund 2026-08-25 an 4P765G8): die Maske ist keine harte Garantie, die KI kann den
+  // bereits korrekt platzierten Anhänger sichtbar mit-überschreiben/schrumpfen/verschieben. Statt
+  // das blind auszuliefern, wird jeder Versuch per Claude-Vision-Check (verifyPendantIntact(), siehe
+  // pendantCheckWindow() oben) geprüft und bei einem offensichtlich zerstörten Anhänger bis zu
+  // MAX_CHAIN_ATTEMPTS-mal neu generiert (jeder Versuch ein echter, kostenpflichtiger OpenAI-Aufruf,
+  // daher knapp begrenzt). Bleibt der Anhänger auch im letzten Versuch kaputt, greift dieselbe
+  // Devise wie beim fehlenden API-Key oben: lieber der mathematisch garantiert korrekte Anhänger
+  // ohne Kette als ein sichtbar falsches Bild.
+  const checkWindow = pendantCheckWindow(pasteRect, baseW, baseH);
+  const sharp = await loadSharp();
+  const beforeCrop = await sharp(pendantOnly).extract(checkWindow).png().toBuffer();
 
-  await recordApiUsage({
-    provider: "openai",
-    purpose: "image_generation",
-    sourceProductId: product.id,
-    variantIndex,
-    model: OPENAI_IMAGE_MODEL,
-    usage,
-    costUsd: estimateOpenAiImageCost(OPENAI_IMAGE_MODEL, usage as Parameters<typeof estimateOpenAiImageCost>[1]),
-  });
+  let attemptsMade = 0;
+  for (let attempt = 1; attempt <= MAX_CHAIN_ATTEMPTS; attempt++) {
+    attemptsMade = attempt;
+    const { buffer: withChain, usage } = await generateChainViaMask(
+      pendantOnly,
+      mask,
+      materialLabel,
+      chainStyleHint,
+      apiKey,
+    );
 
+    await recordApiUsage({
+      provider: "openai",
+      purpose: "image_generation",
+      sourceProductId: product.id,
+      variantIndex,
+      model: OPENAI_IMAGE_MODEL,
+      usage,
+      costUsd: estimateOpenAiImageCost(OPENAI_IMAGE_MODEL, usage as Parameters<typeof estimateOpenAiImageCost>[1]),
+    });
+
+    const afterCrop = await sharp(withChain).extract(checkWindow).png().toBuffer();
+    // null = Check selbst fehlgeschlagen/kein API-Key -> "fail open" (nicht blockieren), damit ein
+    // Claude-Ausfall nicht unnötig OpenAI-Wiederholungen auf Kosten des Nutzers auslöst.
+    const intact = await verifyPendantIntact(beforeCrop, afterCrop, product.id).catch((err) => {
+      console.error("[image-compositing] Anhänger-Intaktheitscheck fehlgeschlagen, lasse Bild durch:", err);
+      return null;
+    });
+    if (intact !== false) {
+      return {
+        buffer: withChain,
+        prompt: `[Compositing-Weg: Anhänger mathematisch platziert, Kette per KI in maskiertem Korridor, Versuch ${attempt}/${MAX_CHAIN_ATTEMPTS}] ${model.name} - ${poseVariant.label}`,
+      };
+    }
+    console.warn(
+      `[image-compositing] Vision-Check meldet beschädigten Anhänger nach KI-Kettenschritt ` +
+        `(Versuch ${attempt}/${MAX_CHAIN_ATTEMPTS}, Produkt ${product.modellErweitert}, ` +
+        `${model.key}/${poseVariant.key}) - ` +
+        (attempt < MAX_CHAIN_ATTEMPTS ? "wiederhole." : "falle auf Anhänger ohne Kette zurück."),
+    );
+  }
+
+  // Alle Versuche zerstörten den Anhänger sichtbar - Fallback auf den reinen Bildmathematik-Anhänger
+  // ohne Kette statt das beste (aber immer noch verdächtige) KI-Ergebnis zu riskieren.
   return {
-    buffer: withChain,
-    prompt: `[Compositing-Weg: Anhänger mathematisch platziert, Kette per KI in maskiertem Korridor] ${model.name} - ${poseVariant.label}`,
+    buffer: pendantOnly,
+    prompt:
+      `[Compositing-Weg: mathematisch platziert, KI-Kette nach ${attemptsMade} Versuchen verworfen ` +
+      `(Anhänger wurde dabei sichtbar verändert)] ${model.name} - ${poseVariant.label}`,
   };
 }
