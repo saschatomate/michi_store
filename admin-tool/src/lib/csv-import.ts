@@ -87,6 +87,12 @@ const PRESERVE_ON_CONFLICT = new Set([
   "firstSeenImportRunId",
   "newArrivalAt",
   "missingFromStockAt",
+  // Fest zugewiesenes MARINELL-Model (siehe schema.ts) - wird von der App berechnet, kommt nicht aus
+  // der CSV. Ohne diesen Eintrag setzt JEDER Katalog-Re-Import (täglicher Cron, items_dg_40.csv ist
+  // immer der volle Katalog) dieses Feld für ALLE Produkte auf NULL zurück, weil "excluded.<spalte>"
+  // für eine Spalte außerhalb der INSERT-Werteliste der Spalten-Default ist (hier NULL) - siehe
+  // Root-Cause-Untersuchung des assignedModelKey-Bugs.
+  "assignedModelKey",
 ]);
 
 function conflictUpdateSet() {

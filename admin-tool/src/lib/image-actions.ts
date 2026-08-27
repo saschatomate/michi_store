@@ -9,7 +9,14 @@ import { generateProductImageVariant } from "@/lib/image-generation";
 import { compositeJewelryVariant } from "@/lib/image-compositing";
 import { signGeneratedImage } from "@/lib/c2pa-sign";
 import { uploadGeneratedImage, deleteGeneratedImage } from "@/lib/image-storage";
-import { assignModel, MARINELL_MODELS, POSE_VARIANTS, type MarinellModel, type PoseVariant } from "@/lib/image-facts";
+import {
+  assignModel,
+  modelKeyByName,
+  MARINELL_MODELS,
+  POSE_VARIANTS,
+  type MarinellModel,
+  type PoseVariant,
+} from "@/lib/image-facts";
 
 type SourceProductRow = typeof sourceProducts.$inferSelect;
 
@@ -24,7 +31,24 @@ async function resolveAndPersistModel(product: SourceProductRow): Promise<Marine
   if (product.assignedModelKey) {
     return MARINELL_MODELS[product.assignedModelKey as MarinellModel["key"]];
   }
-  const key = assignModel(product);
+
+  // assignedModelKey kann leer sein, obwohl für dieses Produkt schon Bilder existieren (z.B. durch
+  // einen Katalog-Re-Import, der das Feld zurückgesetzt hat - siehe PRESERVE_ON_CONFLICT in
+  // csv-import.ts). Dann NIEMALS blind neu ableiten: das ursprüngliche Model war womöglich eine
+  // bewusste manuelle Wahl über den ModelPickerModal, die von assignModel()'s Kategorie-Default
+  // abweicht (genau dieses Muster hätte 4L938W8 fast von Jen auf Sophia umgestellt). Die Historie
+  // der bereits gespeicherten handPreset-Werte ("<Name> – <Pose>[ (Compositing)]") hat Vorrang.
+  const existingImages = await db.query.productGeneratedImages.findMany({
+    where: eq(productGeneratedImages.sourceProductId, product.id),
+  });
+  const historicalKeys = new Set(
+    existingImages
+      .map((img) => modelKeyByName(img.handPreset?.split(" – ")[0]?.trim() ?? ""))
+      .filter((k): k is MarinellModel["key"] => k !== null),
+  );
+  // Nur bei genau einem eindeutigen historischen Model übernehmen - bei widersprüchlicher Historie
+  // (mehrere unterschiedliche Models) oder ganz ohne Historie bleibt assignModel() die Grundlage.
+  const key = historicalKeys.size === 1 ? [...historicalKeys][0] : assignModel(product);
   await db.update(sourceProducts).set({ assignedModelKey: key }).where(eq(sourceProducts.id, product.id));
   return MARINELL_MODELS[key];
 }

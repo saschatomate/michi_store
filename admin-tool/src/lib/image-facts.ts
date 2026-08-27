@@ -302,6 +302,16 @@ export const MARINELL_MODELS: Record<ModelKey, MarinellModel> = {
   },
 };
 
+// Kehrfunktion zu MARINELL_MODELS[key].name - baut aus einem Model-Namen (z.B. aus dem gespeicherten
+// handPreset "<Name> – <Pose>[ (Compositing)]") den zugehörigen Key. Für die Historie-Absicherung in
+// resolveAndPersistModel() (image-actions.ts): wenn assignedModelKey fehlt, aber bereits Bilder mit
+// einem bestimmten Model existieren, hat diese Historie Vorrang vor einer frischen assignModel()-
+// Berechnung, die eine bewusste manuelle Modellwahl (ModelPickerModal) nicht kennen kann.
+export function modelKeyByName(name: string): ModelKey | null {
+  const entry = Object.entries(MARINELL_MODELS).find(([, m]) => m.name === name);
+  return entry ? (entry[0] as ModelKey) : null;
+}
+
 type ModelAssignmentInput = {
   hauptkategorie: string | null;
   giaZertifikatNr: string | null;
