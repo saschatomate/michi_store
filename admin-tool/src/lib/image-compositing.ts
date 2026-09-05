@@ -67,7 +67,11 @@ export type ChainAnchor = { xPercent: number; yPercent: number };
 export type PoseCalibration = {
   /** Festes, wiederverwendetes Foto des Models in dieser Pose, OHNE jeglichen Schmuck. */
   baseImageUrl: string;
-  /** Ankerpunkt (Mittelpunkt der Anhänger-Platzierung) als Prozent der Bildbreite/-höhe. */
+  /**
+   * Ankerpunkt als Prozent der Bildbreite/-höhe. Horizontal (X) und bei Ring/Colliers auch
+   * vertikal (Y) der MITTELPUNKT der Platzierung; bei Ohrschmuck markiert Y stattdessen den
+   * Ansatzpunkt am Ohrläppchen, von dem das Motiv nach unten hängt (siehe compositeRaw()).
+   */
   anchorXPercent: number;
   anchorYPercent: number;
   /**
@@ -801,6 +805,7 @@ export async function compositeRaw(
   chainLengthCm: number | null,
   pendantCrop: MotifCropOverride,
   calibration: PoseCalibration,
+  hauptkategorie: string | null = null,
 ): Promise<PendantPlacement> {
   const sharp = await loadSharp();
   const baseMeta = await sharp(baseBuffer).metadata();
@@ -827,7 +832,21 @@ export async function compositeRaw(
   // (Sophia/Ring, 2026-08-23). Ein moderater Schärfungs-Pass danach stellt eher wahrnehmbare
   // Kanten/Facetten wieder her, ohne Artefakte zu erzeugen - kommt allen Kategorien zugute, nicht
   // nur Ring.
-  const resizedPendant = await sharp(cropped).resize(targetW, targetH).sharpen({ sigma: 1 }).png().toBuffer();
+  const sharpenedPendant = await sharp(cropped).resize(targetW, targetH).sharpen({ sigma: 1 }).png().toBuffer();
+
+  // Fokus-Angleichung (Nutzer-Feedback 2026-09-05, 2Z214R8): das Model-Basisfoto hat echte
+  // fotografische Schärfentiefe (weiche Haar-/Hautkanten, sanfter Kontrastverlauf), das
+  // freigestellte Produktfoto dagegen eine knallharte Studio-Schärfe - noch verstärkt durch den
+  // sharpen()-Schritt oben. Direkt nebeneinander wirkt das Motiv dadurch wie aufgeklebt, VOR ALLEM
+  // an der Alpha-Kante (ein glasklarer Vektor-Rand mitten in einem weich fokussierten Foto fällt
+  // stärker auf als leichte interne Unschärfe). Ein sehr moderater Weichzeichner NACH dem Schärfen
+  // (nicht statt dessen - siehe Kommentar oben, die Pavé-Facetten müssen erkennbar bleiben) auf das
+  // GESAMTE Pendant (RGB und Alpha zusammen, daher vor dem Aufsplitten unten) glättet Kante und
+  // Textur minimal an, ohne das Motiv unscharf/verwaschen wirken zu lassen. Sigma per visueller
+  // Prüfung an genau diesem Fall gewählt (0.3-0.5 kaum sichtbar, 1.0 beginnt das Pavé-Muster zu
+  // verwischen) - bei Bedarf nachjustieren, falls andere Motivgrößen/-muster anders reagieren.
+  const FOCUS_MATCH_BLUR_SIGMA = 0.7;
+  const resizedPendant = await sharp(sharpenedPendant).blur(FOCUS_MATCH_BLUR_SIGMA).png().toBuffer();
 
   // Licht-/Farbangleichung ans Foto (Nutzer-Feedback 2026-08-25): das Produktfoto ist eine flach/
   // hell ausgeleuchtete Studio-Freistelleraufnahme (harte Facetten-Schwarz/Weiß-Kontraste, neutral-
@@ -855,7 +874,19 @@ export async function compositeRaw(
   const anchorX = Math.round((calibration.anchorXPercent / 100) * baseW);
   const anchorY = Math.round((adjustedAnchorYPercent(calibration, chainLengthCm, baseH) / 100) * baseH);
   const pasteLeft = Math.round(anchorX - targetW / 2);
-  const pasteTop = Math.round(anchorY - targetH / 2);
+  // Ohrschmuck ist der Sonderfall: der Anker markiert dort (siehe Ohrläppchen-Kalibrierung) den
+  // Punkt, an dem ein Ohrring am Läppchen ANSETZT, nicht seinen visuellen Mittelpunkt - ein
+  // Ohrring hängt vom Ansatzpunkt nach unten, statt sich mittig darum zu zentrieren. Bei kompakten
+  // Ohrsteckern (wofür der Anker ursprünglich kalibriert wurde) macht die zentrierte Platzierung
+  // kaum einen sichtbaren Unterschied (Motivhöhe klein), fällt aber bei einem länglichen,
+  // hängenden Motiv (Fund 2026-09-05, 2Z214R8, 20mm hohe Pavé-Creole) deutlich auf: die Kreole saß
+  // mittig auf/über dem Läppchen statt wie beim klassischen Weg sichtbar VOM Läppchen herabzuhängen
+  // (Nutzer-Vergleich gegen die klassisch generierten Bilder desselben Produkts). Ring/Colliers
+  // behalten die zentrierte Platzierung (Ring umschließt den Finger mittig; Anhänger hängt an
+  // einer bereits auf den Anhänger selbst zugeschnittenen Kette, siehe resolveColliersPendantCrop -
+  // dort ist "Mittelpunkt" die richtige Semantik, siehe PoseCalibration.anchorYPercent-Doku oben).
+  const pasteTop =
+    hauptkategorie === "Ohrschmuck" ? anchorY : Math.round(anchorY - targetH / 2);
 
   // Weicher Kontaktschatten (reine Bildmathematik, keine KI): Silhouette des Anhängers, geschwärzt,
   // etwas nach unten versetzt (passend zum etablierten "warmes Licht von links oben"-Look, siehe
@@ -1080,6 +1111,7 @@ export async function compositeJewelryVariant(
     product.produktLaengeCm,
     pendantCrop,
     calibration,
+    product.hauptkategorie,
   );
 
   // Ohne Ketten-Kalibrierung für diese Pose (oder ohne API-Key) bleibt es beim Anhänger allein,
