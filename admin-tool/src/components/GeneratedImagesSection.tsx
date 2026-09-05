@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Image from "next/image";
-import { AlertCircle, CheckCircle2, ImageIcon, Pencil, RefreshCw, RotateCcw, Trash2, Users, X, XCircle, ZoomIn } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, ImageIcon, Pencil, RefreshCw, RotateCcw, Trash2, Users, X, XCircle, ZoomIn } from "lucide-react";
 import {
   generateProductImages,
   approveProductImage,
@@ -25,6 +25,10 @@ export type GeneratedImageItem = {
   imageUrl: string | null;
   status: GeneratedImageStatus;
   generationError: string | null;
+  // true nur beim Compositing-Weg, wenn die KI-Kette verworfen wurde (siehe chainMissing-Kommentar
+  // in db/schema.ts) - das Bild selbst gilt sonst als normaler Erfolg (kein generationError), daher
+  // die eigene Badge unten statt den Fall unbemerkt durchrutschen zu lassen.
+  chainMissing: boolean;
   // Kosten des zuletzt für diesen Slot abgeschickten API-Aufrufs (siehe cost-tracking.ts) - null
   // solange für diese Variante noch nichts geloggt wurde (z.B. alte Bilder vor Einführung des
   // Kosten-Trackings).
@@ -233,7 +237,7 @@ function ImageCard({ item }: { item: GeneratedImageItem }) {
 
   return (
     <div className="overflow-hidden rounded-lg border border-zinc-200">
-      <div className="flex aspect-square items-center justify-center bg-zinc-50">
+      <div className="relative flex aspect-square items-center justify-center bg-zinc-50">
         {item.imageUrl ? (
           <button
             type="button"
@@ -258,6 +262,15 @@ function ImageCard({ item }: { item: GeneratedImageItem }) {
             <AlertCircle size={18} />
             <span className="text-xs">{item.generationError ?? "Fehler bei der Generierung"}</span>
           </div>
+        )}
+        {item.imageUrl && item.chainMissing && (
+          <span
+            className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 shadow-sm"
+            title="Die KI-Kette wurde nach mehreren Versuchen verworfen (Anhänger blieb dabei sichtbar unverändert korrekt) - Bild zeigt nur den Anhänger ohne Kette."
+          >
+            <AlertTriangle size={12} />
+            Kette fehlt
+          </span>
         )}
       </div>
       <div className="space-y-1.5 p-3">

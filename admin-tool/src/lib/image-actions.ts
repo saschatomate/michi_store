@@ -74,7 +74,7 @@ async function generateAndSaveVariant(
   const label = `${model.name} – ${poseVariant.label}${methodLabel}`;
 
   try {
-    const { buffer, prompt } =
+    const { buffer, prompt, chainMissing } =
       method === "compositing"
         ? await compositeJewelryVariant(product, model, poseVariant, variantIndex)
         : await generateProductImageVariant(product, model, poseVariant, variantIndex);
@@ -97,6 +97,7 @@ async function generateAndSaveVariant(
           approvedAt: null,
           generatedAt: new Date(),
           generationError: null,
+          chainMissing,
         })
         .where(eq(productGeneratedImages.id, existing.id));
     } else {
@@ -108,6 +109,7 @@ async function generateAndSaveVariant(
         storagePath: path,
         status: "pending_review",
         generatedAt: new Date(),
+        chainMissing,
       });
     }
   } catch (err) {

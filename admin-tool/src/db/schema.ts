@@ -1,4 +1,4 @@
-import { pgTable, text, integer, doublePrecision, jsonb, serial, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, doublePrecision, jsonb, serial, timestamp, index, boolean } from "drizzle-orm/pg-core";
 
 export const STATUS_VALUES = [
   "neu",
@@ -160,6 +160,13 @@ export const productGeneratedImages = pgTable(
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     generatedAt: timestamp("generated_at", { withTimezone: true }),
     generationError: text("generation_error"),
+    // true nur, wenn der Compositing-Weg (image-compositing.ts) den Anhänger ohne Kette ausgeliefert
+    // hat - entweder mangels Ketten-Kalibrierung/API-Key oder weil alle MAX_CHAIN_ATTEMPTS-Versuche
+    // von verifyPendantIntact() verworfen wurden (siehe compositeJewelryVariant()). Sieht in der DB
+    // sonst wie ein normaler Erfolg aus (kein generationError), daher dieses eigene Flag statt den
+    // Fall über den Prompt-Text zu erraten. Für den klassischen Weg (generateProductImageVariant())
+    // immer false - dort gibt es keinen separaten Kettenschritt, der fehlschlagen könnte.
+    chainMissing: boolean("chain_missing").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("product_generated_images_product_idx").on(table.sourceProductId)],

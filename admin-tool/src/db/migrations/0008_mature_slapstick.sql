@@ -1,0 +1,1 @@
+ALTER TABLE "product_generated_images" ADD COLUMN "chain_missing" boolean DEFAULT false NOT NULL;

@@ -275,22 +275,22 @@ export const POSE_CALIBRATIONS: Record<string, PoseCalibration> = {
   "sophia:frontal:Ohrschmuck": {
     baseImageUrl:
       "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-frontal-ohr-v2.png",
-    anchorXPercent: 64.3,
-    anchorYPercent: 27.7,
+    anchorXPercent: 63.0,
+    anchorYPercent: 31.2,
     pxPerMm: 3.08,
   },
   "sophia:dreiviertelprofil:Ohrschmuck": {
     baseImageUrl:
       "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-dreiviertelprofil-ohr-v2.png",
-    anchorXPercent: 53.2,
-    anchorYPercent: 22.5,
+    anchorXPercent: 56.3,
+    anchorYPercent: 24.9,
     pxPerMm: 2.63,
   },
   "sophia:seitlich:Ohrschmuck": {
     baseImageUrl:
       "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/sophia-seitlich-ohr-v2.png",
-    anchorXPercent: 49.3,
-    anchorYPercent: 22.8,
+    anchorXPercent: 50.6,
+    anchorYPercent: 20.7,
     pxPerMm: 2.68,
   },
   "claire:frontal:Ring": {
@@ -314,25 +314,78 @@ export const POSE_CALIBRATIONS: Record<string, PoseCalibration> = {
     anchorYPercent: 52.9,
     pxPerMm: 2.7,
   },
+  // Ohrschmuck-Anker NACHKORRIGIERT (Nutzer-Report 2026-08-27 an 2O504R8, dem ERSTEN je über den
+  // Compositing-Weg gelaufenen Ohrschmuck-Produkt überhaupt): die ursprünglichen Werte (siehe
+  // REKALIBRIERUNG-Kommentar oben - Ring/Ohrschmuck-Anker wurden bei der v2-Rekalibrierung bewusst
+  // NICHT neu vermessen, nur pxPerMm) waren nie an einem echten komponierten Bild gegengeprüft und
+  // saßen bei allen 3 Claire-Posen spürbar zu hoch auf der Ohrmuschel/dem Ohrläppchen-Ansatz statt
+  // mittig auf dem klassischen Ohrläppchen selbst - am deutlichsten bei Frontal/Seitlich sichtbar,
+  // wo direkt über dem Ohrläppchen noch Knorpel sichtbar blieb. Neu vermessen per Prozent-Grid-
+  // Overlay auf dem jeweiligen Basisfoto (Ohrläppchen-Mittelpunkt, nicht Ohrmuschel-Mittelpunkt).
+  // Sophia/Jen/Amara hatten denselben nie verifizierten Ursprung - inzwischen (Nutzer-Auftrag
+  // "ziehe es bei allen nach") nachträglich per selbem Prozent-Grid-Overlay-Verfahren korrigiert
+  // (siehe deren jeweilige Blöcke unten), obwohl noch kein Ohrschmuck-Produkt sie durchlaufen hat -
+  // nur rein bildmathematisch verifiziert (keine KI-Kosten), NICHT an einem echten Katalogprodukt
+  // gegengeprüft. Erste echte Nutzung mit einem dieser 3 Models sollte das Ergebnis trotzdem nochmal
+  // stichprobenartig ansehen.
+  //
+  // Nachschärfung Claire (2. Runde, Nutzer-Feedback "nur Bild 3 [Seitlich] ist ok"): erste Korrektur
+  // traf die Marschrichtung, aber Frontal/Dreiviertelprofil landeten noch am OBEREN Rand des
+  // Ohrläppchens statt mittig - der Anhänger berührte fast noch den Knorpel/Antitragus. Nachgemessen
+  // relativ zu einem festen Landmark (Unterkante des Ohrkanal-Schattens/Tragus statt dem diffuseren
+  // "Ohrläppchen-Mittelpunkt" von Runde 1) ergab an allen 3 Claire-Posen konsistent ca. 11.2-11.4mm
+  // Abstand Landmark→Anhänger-Mitte (Seitlich als bereits korrekte Referenz gegengeprüft) - Frontal/
+  // Dreiviertelprofil per diesem Wert nachjustiert, Seitlich unverändert gelassen.
+  //
+  // Runde 4 (Nutzer-Feedback: nur Seitlich ok, Jen-Frontal nah dran, ALLE anderen 10 "komplett
+  // falsch" - mit expliziter Anatomie-Vorgabe: mittig im weichen Ohrläppchen, nicht im Knorpel/
+  // Helix/Antihelix/Tragus/Concha, ausreichend Abstand zu allen 4 Rändern). Ursache für "komplett
+  // falsch": Runde 2/3 haben nur die Y-Achse (Abstand nach unten) kalibriert, nie die X-Achse - bei
+  // Claire/Seitlich (zufällig) und Jen/Frontal (zufällig ungefähr) traf die geerbte X-Schätzung aus
+  // Runde 1 in etwa, bei allen anderen saß der Anhänger seitlich Richtung Haar/Ohrmuschel-Rand statt
+  // im Läppchen-Zentrum. Zusätzlich hat die pauschale "+6.5mm nach unten"-Korrektur aus Runde 3
+  // (von Claire übernommen und ungeprüft auf alle 9 übertragen) bei mehreren Posen (v.a. Jen/Amara
+  // Frontal+Dreiviertelprofil) den Anhänger komplett durchs sichtbare Läppchen hindurch bis auf den
+  // Kiefer geschoben - das eigentliche Läppchen ist bei Frontal/Dreiviertelprofil-Posen oft nur ein
+  // kleiner, kompakter Bereich direkt unter dem Tragus, kein großzügiger Spielraum wie bei Seitlich.
+  // Fix: JEDE der 11 nicht-Claire-Seitlich-Kombinationen einzeln neu vermessen (X = horizontales
+  // Zentrum des Ohrkanal-Schattens senkrecht nach unten verlängert, Y = Mittelpunkt des tatsächlich
+  // sichtbaren Läppchen-Ausschnitts zwischen Tragus/Antitragus-Unterkante und Kiefer-Übergang) -
+  // keine pauschalen Korrekturen mehr von einer Pose/einem Model auf andere übertragen, jede
+  // Kombination hat ihre eigene Kopf-/Kamerawinkel-Geometrie.
+  //
+  // Runde 5 (finale Kalibrierung, 2026-09-05): der Nutzer hat zunächst 10 fremde Referenzfotos mit
+  // einem roten Punkt ("wo der Ohrring eigentlich sitzen sollte") geschickt - Analyse ergab, dass
+  // sich daraus KEINE generische Formel ableiten lässt (10 verschiedene echte Menschen mit natürlich
+  // unterschiedlicher Ohranatomie/Kamerawinkeln, der Punkt sitzt zwar immer im Läppchen-Bereich, aber
+  // an zu unterschiedlichen Stellen darin für eine saubere Pixel-/mm-Regel). Stattdessen denselben
+  // roten Punkt direkt auf unsere 12 EIGENEN Basisfotos gesetzt bekommen - das ist die eigentlich
+  // belastbare Ground Truth, weil es kein Vermessen mehr braucht: die 12 zurückgeschickten JPGs
+  // wurden automatisiert (a) per Haarfarben-Signatur-Abgleich dem richtigen Model/Pose-Paar
+  // zugeordnet und (b) der Punkt per Pixel-Diff gegen das unveränderte Original exakt lokalisiert
+  // (G/B-Kanal bricht dort hart Richtung 0 ein, R bleibt sichtbar - viel präziser als Augenmaß).
+  // Ergebnis traf Runde 4 überraschend gut (Claire/Seitlich z.B. 39.7/31.4 vs. vorher geschätzt
+  // 39.5/31.9), die Y-Achse war meist nah dran, die X-Achse teils noch 2-6% daneben (v.a. Amara) -
+  // alle 12 Werte unten final auf die Nutzer-Markierung gesetzt, nichts mehr geschätzt.
   "claire:frontal:Ohrschmuck": {
     baseImageUrl:
       "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-frontal-ohr-v2.png",
-    anchorXPercent: 30.3,
-    anchorYPercent: 29.9,
+    anchorXPercent: 32.5,
+    anchorYPercent: 33.0,
     pxPerMm: 3.08,
   },
   "claire:dreiviertelprofil:Ohrschmuck": {
     baseImageUrl:
       "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-dreiviertelprofil-ohr-v2.png",
-    anchorXPercent: 35.6,
-    anchorYPercent: 27.7,
+    anchorXPercent: 41.4,
+    anchorYPercent: 30.4,
     pxPerMm: 2.63,
   },
   "claire:seitlich:Ohrschmuck": {
     baseImageUrl:
       "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/claire-seitlich-ohr-v2.png",
-    anchorXPercent: 36.1,
-    anchorYPercent: 28.3,
+    anchorXPercent: 39.7,
+    anchorYPercent: 31.4,
     pxPerMm: 2.68,
   },
   "jen:frontal:Ring": {
@@ -359,22 +412,22 @@ export const POSE_CALIBRATIONS: Record<string, PoseCalibration> = {
   "jen:frontal:Ohrschmuck": {
     baseImageUrl:
       "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-frontal-ohr-v2.png",
-    anchorXPercent: 78.1,
-    anchorYPercent: 27.7,
+    anchorXPercent: 78.6,
+    anchorYPercent: 32.1,
     pxPerMm: 3.0,
   },
   "jen:dreiviertelprofil:Ohrschmuck": {
     baseImageUrl:
       "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-dreiviertelprofil-ohr-v2.png",
-    anchorXPercent: 64.9,
-    anchorYPercent: 26.4,
+    anchorXPercent: 64.7,
+    anchorYPercent: 26.8,
     pxPerMm: 2.8,
   },
   "jen:seitlich:Ohrschmuck": {
     baseImageUrl:
       "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/jen-seitlich-ohr-v2.png",
-    anchorXPercent: 69.8,
-    anchorYPercent: 26.4,
+    anchorXPercent: 70.5,
+    anchorYPercent: 30.3,
     pxPerMm: 2.8,
   },
   "amara:frontal:Ring": {
@@ -402,21 +455,21 @@ export const POSE_CALIBRATIONS: Record<string, PoseCalibration> = {
     baseImageUrl:
       "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-frontal-ohr-v2.png",
     anchorXPercent: 67.4,
-    anchorYPercent: 26.0,
+    anchorYPercent: 27.9,
     pxPerMm: 2.9,
   },
   "amara:dreiviertelprofil:Ohrschmuck": {
     baseImageUrl:
       "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-dreiviertelprofil-ohr-v2.png",
-    anchorXPercent: 66.9,
-    anchorYPercent: 26.0,
+    anchorXPercent: 69.2,
+    anchorYPercent: 28.1,
     pxPerMm: 2.8,
   },
   "amara:seitlich:Ohrschmuck": {
     baseImageUrl:
       "https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/pose-base/amara-seitlich-ohr-v2.png",
-    anchorXPercent: 63.5,
-    anchorYPercent: 25.4,
+    anchorXPercent: 66.7,
+    anchorYPercent: 30.3,
     pxPerMm: 2.8,
   },
 };
@@ -486,8 +539,25 @@ export type MotifCropOverride = { left: number; top: number; width: number; heig
 // echter Transparenz, siehe dort). Schlüssel: modellErweitert. 4R267R8 wurde über ein Prozent-
 // Grid-Overlay auf dem 2000x2000-Foto ausgemessen (Cluster ca. x:30-72%, y:57-89%). Jedes weitere
 // Produkt mit demselben Freisteller-Stil braucht vorerst denselben manuellen Schritt.
+//
+// 2O504R8 (Nutzer-Report 2026-08-27, Ohrstecker "Illusion Classic"): anderer Grund als oben - hier
+// schlägt resolveOhrschmuckCrop() nicht fehl, sondern greift die falsche Hälfte im Sinne der dort
+// dokumentierten Konvention. Normalerweise zeigt das Freisteller-Paarfoto LINKS die reine
+// Frontalansicht (Steg/Schmetterlingsverschluss vom Kopf verdeckt) und RECHTS dieselbe Ansicht
+// gekippt MIT sichtbarem Steg+Verschluss (an 6 Stichproben aus 6 verschiedenen Kategorien
+// bestätigt: 2H860W4/2J895W8/2V749W8/2Y112G8/2Z095W8/2X992G8, alle folgen der Konvention). Bei
+// 2O504R8 zeigt aber schon die LINKE Hälfte den gekippten Aufbau mit sichtbarem rundem
+// Rückseiten-Verschluss NEBEN dem Pavé-Kopf statt dahinter verdeckt - vermutlich ein Ausreißer
+// aus demselben Fotoshooting-Batch, nicht die übliche Konvention. Ungefiltert übernommen sah das
+// Ohrläppchen dadurch aus, als säßen beide Teile auf derselben (vorderen) Seite statt Verschluss
+// hinten/Pavé-Kopf vorne mit dem Läppchen dazwischen - genau der vom Nutzer gemeldete anatomische
+// Fehler. Override schneidet direkt auf NUR den Pavé-Kopf zu (per Grid-Overlay + sharp .trim()
+// gegengeprüft, keine sichtbaren Reste von Steg/Verschluss mehr). Aktuell einziges Produkt unter
+// Modell "2O504" im Katalog (keine Farbvarianten), daher kein bekannter weiterer betroffener SKU -
+// bei künftigen Neuzugängen mit auffällig ähnlichem Freisteller-Stil ggf. erneut prüfen.
 const PRODUCT_MOTIF_OVERRIDES: Record<string, MotifCropOverride> = {
   "4R267R8": { left: 600, top: 1140, width: 840, height: 640 },
+  "2O504R8": { left: 505, top: 870, width: 448, height: 440 },
 };
 
 // Diamond-Group-Freisteller-Fotos für Ohrschmuck (Ohrstecker) zeigen in EINEM Bild oft zwei
@@ -980,7 +1050,7 @@ export async function compositeJewelryVariant(
   model: MarinellModel,
   poseVariant: PoseVariant,
   variantIndex: number,
-): Promise<{ buffer: Buffer; prompt: string }> {
+): Promise<{ buffer: Buffer; prompt: string; chainMissing: boolean }> {
   const calibration = findCalibration(model.key, poseVariant.key, product.hauptkategorie);
   if (!calibration) {
     throw new Error(
@@ -1019,6 +1089,12 @@ export async function compositeJewelryVariant(
     return {
       buffer: pendantOnly,
       prompt: `[Compositing-Weg: mathematisch platziert, keine Kette] ${model.name} - ${poseVariant.label}`,
+      // chainMissing ist nur bei Colliers eine echte Anomalie (siehe Feld-Kommentar in schema.ts).
+      // Ring/Ohrschmuck haben laut POSE_CALIBRATIONS oben STRUKTURELL nie chainLeftAnchor/
+      // chainRightAnchor (kein Kettenkonzept) und landen deshalb bei JEDER Generierung in diesem
+      // Zweig - ohne diese Einschränkung würde das jedes Ring-/Ohrschmuck-Bild fälschlich als
+      // "Kette fehlt" markieren, obwohl dort gar keine erwartet wird.
+      chainMissing: product.hauptkategorie === "Colliers",
     };
   }
 
@@ -1093,6 +1169,7 @@ export async function compositeJewelryVariant(
       return {
         buffer: withChain,
         prompt: `[Compositing-Weg: Anhänger mathematisch platziert, Kette per KI in maskiertem Korridor, Versuch ${attempt}/${MAX_CHAIN_ATTEMPTS}] ${model.name} - ${poseVariant.label}`,
+        chainMissing: false,
       };
     }
     console.warn(
@@ -1110,5 +1187,6 @@ export async function compositeJewelryVariant(
     prompt:
       `[Compositing-Weg: mathematisch platziert, KI-Kette nach ${attemptsMade} Versuchen verworfen ` +
       `(Anhänger wurde dabei sichtbar verändert)] ${model.name} - ${poseVariant.label}`,
+    chainMissing: true,
   };
 }

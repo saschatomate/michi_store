@@ -318,7 +318,7 @@ export async function generateProductImageVariant(
   model: MarinellModel,
   poseVariant: PoseVariant,
   variantIndex: number,
-): Promise<{ buffer: Buffer; prompt: string }> {
+): Promise<{ buffer: Buffer; prompt: string; chainMissing: boolean }> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY ist nicht gesetzt (.env.local prüfen).");
@@ -401,5 +401,7 @@ export async function generateProductImageVariant(
     throw new Error("Bild-API hat kein Bild zurückgegeben.");
   }
 
-  return { buffer: Buffer.from(b64, "base64"), prompt };
+  // Kein separater Kettenschritt in diesem Weg (Kette ist Teil desselben Generierungsschritts wie
+  // der Rest des Bilds) - chainMissing ist hier also nie zutreffend, siehe Feld-Kommentar in schema.ts.
+  return { buffer: Buffer.from(b64, "base64"), prompt, chainMissing: false };
 }
