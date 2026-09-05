@@ -38,8 +38,11 @@ const SYSTEM_INSTRUCTIONS_BEFORE_CLOTHING =
   "der deutlich mehr vom Model zeigt als eine isolierte Nahaufnahme nur des Schmuckstücks - je " +
   "nach Schmuckart z.B. Teile von Kinn/Mund, Hals, Schulter oder Oberkörper mit im Bild, dabei " +
   "immer vollständig und nicht freizügig bekleidet. Das Schmuckstück bleibt scharf im Fokus, alles " +
-  "andere (Haare, Hintergrund, entferntere Hautpartien) durch geringe Schärfentiefe (Bokeh) leicht " +
-  "unscharf. Hintergrund: champagnerfarbener " +
+  "andere (Haare, Hintergrund, entferntere Hautpartien) durch SEHR GERINGE, dezente Schärfentiefe " +
+  "(Bokeh) nur minimal unscharf - kein auffälliger, wie ein Foto-Filter wirkender Weichzeichner-" +
+  "Effekt, und die Unschärfe nimmt NICHT zum unteren Bildrand hin zu: Hände, Arme, Kleidung und " +
+  "Körperpartien im unteren Bildbereich bleiben klar und deutlich erkennbar, nicht verwaschen. " +
+  "Hintergrund: champagnerfarbener " +
   "Seiden-/Satinvorhang mit weichen Falten, oder alternativ ein warmer, heller Sandton-Studiohintergrund " +
   "ohne sichtbare Struktur oder Requisiten - Farbwelt durchgehend Ivory, Champagne, Warm Sand, " +
   "Cashmere, Black, Warm Gold, Soft Taupe. Licht: warmes 'Golden Hour'/Champagnerlicht - großes, " +
