@@ -210,6 +210,23 @@ export function motifSizeMm(product: SourceProductRow): number | null {
   return null;
 }
 
+// Für den Bildbreiten-Deckel (frameWidthClause unten) zählt spezifisch die REALE BREITE des
+// Motivs, nicht motifSizeMm()'s Max(Breite,Höhe) - der ist für den Alltagsobjekt-Vergleich bewusst
+// "wie groß wirkt es insgesamt" und dafür korrekt (siehe dort), aber bei einem hochkant länglichen
+// Stück (Höhe > Breite, z.B. ein Tropfen-/Creolen-Ohrring) würde er die HÖHE als Bildbreiten-
+// Referenz einsetzen und den erlaubten Breitenanteil dadurch zu großzügig machen. Fund 2026-09-05
+// (2Z214R8, 20mm hoch x 12mm breite Pavé-Creole, klassischer Pfad): maxWidthPercent wurde mit den
+// 20mm statt den tatsächlichen 12mm Breite berechnet (12% statt korrekt ~7% der Bildbreite) - das
+// Schmuckstück kam sichtbar zu groß raus, obwohl die Aufhängung/Position stimmte. Fallback-
+// Reihenfolge wie motifSizeMm (Durchmesser bei Armreifen/Armbändern weiterhin ausgeschlossen, aus
+// demselben Grund wie dort), zuletzt motifSizeMm() selbst für Fälle ohne breite/durchmesser.
+function motifWidthMm(product: SourceProductRow): number | null {
+  if (product.breite && product.breite > 0) return product.breite;
+  const isWristFit = product.hauptkategorie === "Armreifen" || product.hauptkategorie === "Armbänder";
+  if (product.durchmesser && product.durchmesser > 0 && !isWristFit) return product.durchmesser;
+  return motifSizeMm(product);
+}
+
 // Holt die echten Produktdaten (Material/Legierung, Diamant-/Farbstein-Details, Maße) und baut
 // daraus einen Fakten-Block für den Bild-Prompt - der Bildgenerator soll Größe, Proportionen und
 // Farben NICHT nur aus dem (ggf. unterschiedlich beleuchteten/komprimierten) Referenzfoto ableiten,
@@ -286,8 +303,9 @@ export function productFactsPromptAddition(product: SourceProductRow, mapping?: 
       `den Maßstab im Bild, NICHT an der (typischerweise bildfüllenden) Größe im freigestellten ` +
       `Referenzfoto.`
     : "";
+  const widthMm = motifWidthMm(product);
   const maxWidthPercent =
-    motifMm && mapping ? Math.max(1, Math.round((motifMm / mapping.estimatedFrameWidthMm) * 100)) : null;
+    widthMm && mapping ? Math.max(1, Math.round((widthMm / mapping.estimatedFrameWidthMm) * 100)) : null;
   const frameWidthClause = maxWidthPercent
     ? ` KRITISCH als harte Obergrenze: Das gesamte Schmuckstück (alle Steine/Elemente zusammen) ` +
       `darf im fertigen Bild NICHT breiter als ca. ${maxWidthPercent}% der sichtbaren Bildbreite ` +
