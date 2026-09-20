@@ -21,7 +21,12 @@ import {
 type SourceProductRow = typeof sourceProducts.$inferSelect;
 
 // Zwei unabhängige Generierungswege, wählbar im ModelPickerModal (siehe hasCompositingSupport()
-// für wann "compositing" überhaupt angeboten wird). "classic" bleibt der Standard.
+// für wann "compositing" überhaupt angeboten wird). Seit 2026-09-05 ist "compositing" dort die
+// Vorauswahl, sobald für Model+Kategorie eine Kalibrierung existiert (siehe
+// marinell-classic-vs-compositing-size-strategy: Klassisch hat die Motivgröße trotz zweier
+// Prompt-Fixes in Folge nicht zuverlässig hinbekommen) - "classic" bleibt daneben wählbar und ist
+// weiterhin der Default-Parameter unten, für Kombinationen ohne Kalibrierung und für Aufrufer, die
+// method nicht explizit setzen.
 export type GenerationMethod = "classic" | "compositing";
 
 // Löst das zugewiesene Model auf und persistiert es beim allerersten Aufruf für dieses Produkt

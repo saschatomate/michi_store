@@ -70,8 +70,12 @@ function ModelPickerModal({
   const initialModel = models.find((m) => m.key === (currentModelKey ?? recommendedModelKey));
   const [genderFilter, setGenderFilter] = useState<ModelGender>(initialModel?.gender ?? "weiblich");
   const visibleModels = models.filter((m) => m.gender === genderFilter);
-  const [method, setMethod] = useState<GenerationMethod>("classic");
+  // Standard ist Compositing, sobald es für das (anfangs) ausgewählte Model+Kategorie kalibriert
+  // ist - mathematisch exakte Größe statt KI-Schätzung, siehe marinell-classic-vs-compositing-
+  // size-strategy (zwei gescheiterte Klassisch-Größen-Fixes in Folge). "Klassisch" bleibt als
+  // gleichwertig wählbare Option bestehen, nur nicht mehr vorausgewählt wo Compositing existiert.
   const compositingAvailable = compositingSupportedModelKeys.includes(selected);
+  const [method, setMethod] = useState<GenerationMethod>(compositingAvailable ? "compositing" : "classic");
 
   function selectGender(gender: ModelGender) {
     setGenderFilter(gender);
@@ -81,13 +85,13 @@ function ModelPickerModal({
       const fallback = models.find((m) => m.gender === gender);
       const nextKey = (recommended ?? fallback)?.key ?? selected;
       setSelected(nextKey);
-      if (!compositingSupportedModelKeys.includes(nextKey)) setMethod("classic");
+      setMethod(compositingSupportedModelKeys.includes(nextKey) ? "compositing" : "classic");
     }
   }
 
   function selectModel(key: ModelKey) {
     setSelected(key);
-    if (!compositingSupportedModelKeys.includes(key)) setMethod("classic");
+    setMethod(compositingSupportedModelKeys.includes(key) ? "compositing" : "classic");
   }
 
   return (
@@ -188,8 +192,8 @@ function ModelPickerModal({
             >
               <span className="block font-semibold text-zinc-900">Klassisch (KI)</span>
               <span className="block text-zinc-500">
-                Ein KI-Generierungsschritt. Bewährt, Größe kann bei sehr kleinen Stücken leicht
-                übertrieben wirken.
+                Ein KI-Generierungsschritt. Motivgröße folgt einer Textanweisung an die KI und
+                kann abweichen{compositingAvailable && " - wo verfügbar ist Compositing die zuverlässigere Wahl"}.
               </span>
             </button>
             <button
@@ -209,7 +213,7 @@ function ModelPickerModal({
                     : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50"
               }`}
             >
-              <span className="block font-semibold text-zinc-900">Compositing (Beta)</span>
+              <span className="block font-semibold text-zinc-900">Compositing (Standard)</span>
               <span className="block text-zinc-500">
                 Mathematisch exakte Größe (kein KI-Ratespiel), dann nur ein KI-Politur-Schritt für
                 Licht/Schatten. {!compositingAvailable && "Für dieses Model/Kategorie noch nicht verfügbar."}
