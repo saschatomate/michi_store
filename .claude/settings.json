@@ -101,7 +101,10 @@
       "Bash(curl -s -o /private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad/check-amara.png https://juczmszqojkmvigxyjvv.supabase.co/storage/v1/object/public/product-images/generated/181/0-1785014737849.png)",
       "Bash(node gen-text-check.mjs)",
       "Bash(node test-model-picker.mjs)",
-      "Bash(node test-thumbnails.mjs)"
+      "Bash(node test-thumbnails.mjs)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('\\\\n'.join\\(sorted\\(list\\(d.get\\('dependencies',{}\\).keys\\(\\)\\)+list\\(d.get\\('devDependencies',{}\\).keys\\(\\)\\)\\)\\)\\)\")",
+      "Bash(git check-ignore *)",
+      "WebFetch(domain:shopify.dev)"
     ],
     "additionalDirectories": [
       "/private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad",
