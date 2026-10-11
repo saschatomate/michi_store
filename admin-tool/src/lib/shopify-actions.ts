@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { productAuditLog, sourceProducts } from "@/db/schema";
 import { requireAuth } from "@/lib/dal";
-import { shopReadinessProblems, syncProductToShopify, type ShopifyMode } from "@/lib/shopify-sync";
+import { publishAndRecord, shopReadinessProblems, type ShopifyMode } from "@/lib/shopify-sync";
 
 function refresh(id: number) {
   revalidatePath("/");
@@ -35,13 +35,13 @@ export async function approveProductForShop(id: number): Promise<{ ok: true } | 
 }
 
 export type PublishResult =
-  | { ok: true; shopifyProductId: string; status: ShopifyMode; created: boolean }
+  | { ok: true; shopifyProductId: string; status: "draft" | "active" | "archived"; created: boolean; skipped: boolean }
   | { ok: false; error: string };
 
 // Überträgt (oder aktualisiert) das Produkt in Shopify. Standard ist ein ENTWURF - "aktiv" muss
-// bewusst gewählt werden. Fehler führen nicht zu einer Exception, sondern zum Status
-// "Übertragungsfehler" mit Fehlertext am Produkt.
-export async function publishProductToShopify(id: number, mode: ShopifyMode): Promise<PublishResult> {
+// bewusst gewählt werden; "keep" behält den bisherigen Shopify-Status bei. Fehler führen nicht zu
+// einer Exception, sondern zum Status "Übertragungsfehler" mit Fehlertext am Produkt.
+export async function publishProductToShopify(id: number, mode: ShopifyMode | "keep"): Promise<PublishResult> {
   await requireAuth();
   const product = await db.query.sourceProducts.findFirst({ where: eq(sourceProducts.id, id) });
   if (!product) throw new Error("Produkt nicht gefunden.");
@@ -49,22 +49,7 @@ export async function publishProductToShopify(id: number, mode: ShopifyMode): Pr
     return { ok: false, error: "Das Produkt ist noch nicht für den Shop freigegeben." };
   }
 
-  try {
-    const result = await syncProductToShopify(id, { mode });
-    if (product.status !== "veroeffentlicht") {
-      await db.update(sourceProducts).set({ status: "veroeffentlicht" }).where(eq(sourceProducts.id, id));
-      await logStatus(id, product.status, "veroeffentlicht");
-    }
-    refresh(id);
-    return { ok: true, shopifyProductId: result.shopifyProductId, status: result.status, created: result.created };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    await db
-      .update(sourceProducts)
-      .set({ status: "uebertragungsfehler", shopifySyncError: message.slice(0, 2000), updatedAt: new Date() })
-      .where(eq(sourceProducts.id, id));
-    if (product.status !== "uebertragungsfehler") await logStatus(id, product.status, "uebertragungsfehler");
-    refresh(id);
-    return { ok: false, error: message };
-  }
+  const result = await publishAndRecord(id, { mode });
+  refresh(id);
+  return result;
 }

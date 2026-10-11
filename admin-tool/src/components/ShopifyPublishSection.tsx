@@ -13,6 +13,7 @@ export function ShopifyPublishSection({
   shopifyStatus,
   syncedAt,
   syncError,
+  outOfSync,
   adminUrl,
 }: {
   id: number;
@@ -20,6 +21,7 @@ export function ShopifyPublishSection({
   shopifyStatus: string | null;
   syncedAt: Date | null;
   syncError: string | null;
+  outOfSync: boolean;
   adminUrl: string | null;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -33,7 +35,7 @@ export function ShopifyPublishSection({
     });
   }
 
-  function publish(mode: "draft" | "active") {
+  function publish(mode: "draft" | "active" | "keep") {
     if (mode === "active" && !window.confirm("Produkt LIVE schalten? Es ist danach im Shop für Kunden sichtbar und bestellbar.")) {
       return;
     }
@@ -41,9 +43,10 @@ export function ShopifyPublishSection({
     startTransition(async () => {
       const res = await publishProductToShopify(id, mode);
       if (res.ok) {
+        const state = res.status === "active" ? "aktiv" : res.status === "archived" ? "archiviert" : "Entwurf";
         setMessage({
           kind: "ok",
-          text: `${res.created ? "Angelegt" : "Aktualisiert"} in Shopify (${res.status === "active" ? "aktiv" : "Entwurf"}).`,
+          text: res.skipped ? "Shopify ist bereits aktuell." : `${res.created ? "Angelegt" : "Aktualisiert"} in Shopify (${state}).`,
         });
       } else {
         setMessage({ kind: "error", text: res.error });
@@ -62,7 +65,7 @@ export function ShopifyPublishSection({
 
       {shopifyStatus && (
         <p className="mb-2 text-sm text-zinc-700">
-          In Shopify: <strong>{shopifyStatus === "active" ? "aktiv (live)" : "Entwurf"}</strong>
+          In Shopify: <strong>{shopifyStatus === "active" ? "aktiv (live)" : shopifyStatus === "archived" ? "archiviert (ausgelistet)" : "Entwurf"}</strong>
           {syncedAt && <span className="text-zinc-500"> · zuletzt übertragen {formatDateTime(syncedAt)}</span>}
           {adminUrl && (
             <a href={adminUrl} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-1 text-indigo-600 hover:underline">
@@ -70,6 +73,15 @@ export function ShopifyPublishSection({
             </a>
           )}
         </p>
+      )}
+      {outOfSync && status !== "uebertragungsfehler" && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <AlertCircle size={15} className="shrink-0" />
+          <span>Shopify ist nicht mehr aktuell (Preis, Text, Lieferzeit, Bilder oder Kategorien haben sich geändert). Das passiert auch automatisch jede Nacht.</span>
+          <button onClick={() => publish("keep")} disabled={isPending} className={buttonSecondary}>
+            Jetzt nachziehen
+          </button>
+        </div>
       )}
       {status === "uebertragungsfehler" && syncError && (
         <div className="mb-2 flex items-start gap-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">

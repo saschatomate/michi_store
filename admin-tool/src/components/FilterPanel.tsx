@@ -38,6 +38,8 @@ type Overrides = Partial<{
   newArrivalOnly: boolean | undefined;
   missingOnly: boolean | undefined;
   customOnly: boolean | undefined;
+  shopifyOnly: boolean | undefined;
+  shopifyChanged: boolean | undefined;
 }>;
 
 function filterHref(filters: ProductFilters, overrides: Overrides) {
@@ -59,6 +61,8 @@ function filterHref(filters: ProductFilters, overrides: Overrides) {
   if (merged.newArrivalOnly) params.set("newArrivalOnly", "1");
   if (merged.missingOnly) params.set("missingOnly", "1");
   if (merged.customOnly) params.set("customOnly", "1");
+  if (merged.shopifyOnly) params.set("shopifyOnly", "1");
+  if (merged.shopifyChanged) params.set("shopifyChanged", "1");
   const qs = params.toString();
   return qs ? `/?${qs}` : "/";
 }
@@ -151,6 +155,16 @@ function buildChips(filters: ProductFilters, importRunLabel: string | null) {
       key: "missingOnly",
       label: "Nicht mehr im Bestand",
       href: filterHref(filters, { missingOnly: undefined }),
+    });
+  }
+  if (filters.shopifyOnly) {
+    chips.push({ key: "shopifyOnly", label: "In Shopify", href: filterHref(filters, { shopifyOnly: undefined }) });
+  }
+  if (filters.shopifyChanged) {
+    chips.push({
+      key: "shopifyChanged",
+      label: "Kürzlich nach Shopify geändert",
+      href: filterHref(filters, { shopifyChanged: undefined }),
     });
   }
   if (filters.customOnly) {
@@ -283,6 +297,16 @@ export function FilterPanel({ options }: { options: FilterOptions }) {
               label="Nur nicht mehr im Bestand"
               name="missingOnly"
               checked={filters.missingOnly ?? false}
+            />
+            <BooleanFilter
+              label="Nur Produkte in Shopify"
+              name="shopifyOnly"
+              checked={filters.shopifyOnly ?? false}
+            />
+            <BooleanFilter
+              label="In den letzten 3 Tagen nach Shopify geändert"
+              name="shopifyChanged"
+              checked={filters.shopifyChanged ?? false}
             />
             <BooleanFilter
               label="Nur eigene Produkte"

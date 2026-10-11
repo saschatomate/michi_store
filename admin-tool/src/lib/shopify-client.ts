@@ -257,3 +257,42 @@ export async function shopifyDeleteProduct(id: string): Promise<void> {
   );
   throwOnUserErrors("Shopify productDelete", res.productDelete.userErrors);
 }
+
+export async function shopifySetProductStatus(id: string, status: "ACTIVE" | "DRAFT" | "ARCHIVED"): Promise<void> {
+  const res = await shopifyGraphql<{ productUpdate: { userErrors: ShopifyUserError[] } }>(
+    `mutation($product: ProductUpdateInput!) { productUpdate(product: $product) { userErrors { field message } } }`,
+    { product: { id, status } },
+  );
+  throwOnUserErrors("Shopify productUpdate", res.productUpdate.userErrors);
+}
+
+// Ersetzt alle Produktbilder durch die übergebene Liste (Reihenfolge = Reihenfolge der Liste).
+// Bewusst "alles löschen, alles neu anlegen" statt eines Einzelabgleichs: Shopify liefert für
+// Bilder nur die eigenen CDN-URLs zurück, eine Zuordnung zur Original-URL ist nicht möglich.
+export async function shopifyReplaceMedia(productId: string, urls: string[], alt: string): Promise<void> {
+  const existing = await shopifyGraphql<{ product: { media: { nodes: { id: string }[] } } }>(
+    `query($id: ID!) { product(id: $id) { media(first: 100) { nodes { id } } } }`,
+    { id: productId },
+  );
+  const oldIds = existing.product.media.nodes.map((m) => m.id);
+
+  if (urls.length > 0) {
+    const created = await shopifyGraphql<{ productCreateMedia: { mediaUserErrors: ShopifyUserError[] } }>(
+      `mutation($productId: ID!, $media: [CreateMediaInput!]!) {
+        productCreateMedia(productId: $productId, media: $media) { mediaUserErrors { field message } }
+      }`,
+      { productId, media: urls.map((originalSource) => ({ originalSource, mediaContentType: "IMAGE", alt })) },
+    );
+    throwOnUserErrors("Shopify productCreateMedia", created.productCreateMedia.mediaUserErrors);
+  }
+  // Erst nach dem erfolgreichen Anlegen löschen - schlägt das Anlegen fehl, bleiben die alten Bilder.
+  if (oldIds.length > 0) {
+    const del = await shopifyGraphql<{ productDeleteMedia: { mediaUserErrors: ShopifyUserError[] } }>(
+      `mutation($productId: ID!, $mediaIds: [ID!]!) {
+        productDeleteMedia(productId: $productId, mediaIds: $mediaIds) { mediaUserErrors { field message } }
+      }`,
+      { productId, mediaIds: oldIds },
+    );
+    throwOnUserErrors("Shopify productDeleteMedia", del.productDeleteMedia.mediaUserErrors);
+  }
+}

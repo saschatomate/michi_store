@@ -122,6 +122,15 @@ export const sourceProducts = pgTable(
     shopifyStatus: text("shopify_status"), // draft | active
     shopifySyncedAt: timestamp("shopify_synced_at", { withTimezone: true }),
     shopifySyncError: text("shopify_sync_error"),
+    // Prüfsumme über alles, was zuletzt nach Shopify gegangen ist (Preis, Texte, Lieferzeit,
+    // Kategorien, Bild-URLs ...) - weicht die aktuelle Berechnung davon ab, ist Shopify nicht mehr
+    // aktuell und das Produkt wird nachgezogen (shopify-sync.ts). shopifyImageUrls: die zuletzt
+    // übertragenen Bilder, damit Bildänderungen erkannt werden.
+    shopifySyncSignature: text("shopify_sync_signature"),
+    shopifyImageUrls: jsonb("shopify_image_urls").$type<string[]>(),
+    // Lesbarer Stand der letzten Übertragung (Preis, Lieferzeit, Titel ...). Dient nur dazu, bei der
+    // nächsten Übertragung "alt -> neu" für den Shopify-Verlauf zu berechnen.
+    shopifySnapshot: jsonb("shopify_snapshot").$type<Record<string, unknown>>(),
 
     // Welcher Import-Lauf diesen Artikel zuerst angelegt hat (nur bei INSERT gesetzt, bleibt bei
     // Re-Import/Update unangetastet - siehe PRESERVE_ON_CONFLICT in csv-import.ts). NULL bei
@@ -337,7 +346,10 @@ export const productAuditLog = pgTable(
     actor: text("actor").notNull().default("admin"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("product_audit_log_product_idx").on(table.sourceProductId)],
+  (table) => [
+    index("product_audit_log_product_idx").on(table.sourceProductId),
+    index("product_audit_log_created_idx").on(table.createdAt),
+  ],
 );
 
 // Lieferzeit-Regeln (konfigurierbar in der Oberfläche statt im Code): "in_stock" (Lagerware),

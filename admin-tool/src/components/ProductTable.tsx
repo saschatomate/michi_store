@@ -8,6 +8,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Lightbox } from "@/components/Lightbox";
 import { sendSelectedToPipeline } from "@/lib/product-actions";
 import type { ProductStatus } from "@/db/schema";
+import { isRecent, SHOPIFY_ACTION_LABEL, type ShopifyAction } from "@/lib/shopify-changes";
+import { formatDateTime } from "@/lib/format";
 
 export type ProductListItem = {
   id: number;
@@ -25,6 +27,9 @@ export type ProductListItem = {
   isMissingFromStock: boolean;
   isCustom: boolean;
   isDiscontinued: boolean;
+  shopifyStatus: string | null;
+  shopifyOutOfSync: boolean;
+  shopifyLastEvent: { action: string; at: Date; summary: string } | null;
 };
 
 const currencyFormatter = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
@@ -146,7 +151,16 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
               </tr>
             )}
             {products.map((p) => (
-              <tr key={p.id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50">
+              <tr
+                key={p.id}
+                className={`border-b border-zinc-100 last:border-0 hover:bg-zinc-50 ${
+                  p.shopifyLastEvent?.action === "shopify_error"
+                    ? "bg-red-50/60 shadow-[inset_4px_0_0_0_#dc2626]"
+                    : isRecent(p.shopifyLastEvent?.at) || p.shopifyOutOfSync
+                      ? "bg-orange-50/70 shadow-[inset_4px_0_0_0_#f97316]"
+                      : ""
+                }`}
+              >
                 <td className="px-4 py-2">
                   <input
                     type="checkbox"
@@ -215,6 +229,35 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
                       </span>
                     )}
                   </div>
+                  {p.shopifyStatus && (
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white ${
+                          p.shopifyStatus === "active" ? "bg-emerald-600" : p.shopifyStatus === "archived" ? "bg-zinc-700" : "bg-sky-600"
+                        }`}
+                      >
+                        Shopify {p.shopifyStatus === "active" ? "live" : p.shopifyStatus === "archived" ? "archiviert" : "Entwurf"}
+                      </span>
+                      {p.shopifyLastEvent?.action === "shopify_error" && (
+                        <span className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                          ⚠ Übertragung fehlgeschlagen
+                        </span>
+                      )}
+                      {p.shopifyLastEvent && p.shopifyLastEvent.action !== "shopify_error" && isRecent(p.shopifyLastEvent.at) && (
+                        <span
+                          title={`${SHOPIFY_ACTION_LABEL[p.shopifyLastEvent.action as ShopifyAction] ?? p.shopifyLastEvent.action} · ${formatDateTime(p.shopifyLastEvent.at)}`}
+                          className="animate-pulse rounded bg-orange-500 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+                        >
+                          ↑ Nach Shopify geändert{p.shopifyLastEvent.summary ? `: ${p.shopifyLastEvent.summary}` : ""} · {formatDateTime(p.shopifyLastEvent.at)}
+                        </span>
+                      )}
+                      {p.shopifyOutOfSync && (
+                        <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                          ⚠ Shopify nicht aktuell
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div className="font-mono text-xs text-zinc-400">{p.modellErweitert}</div>
                 </td>
                 <td className="px-3 py-2 text-zinc-600">{p.kategorieEbene1 ?? "–"}</td>

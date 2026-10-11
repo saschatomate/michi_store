@@ -26,10 +26,18 @@ export type FilterOptions = {
   runs: ImportRunOption[];
 };
 
+// Die Optionen ändern sich höchstens mit dem täglichen Import - deshalb 10 Minuten im Speicher
+// halten, statt bei JEDEM Seitenaufruf sechs DISTINCT-Abfragen über die ganze Produkttabelle zu
+// fahren (die bei Last in den Statement-Timeout der Datenbank liefen und damit jede Seite lahmlegten).
+const CACHE_TTL_MS = 10 * 60 * 1000;
+let cache: { at: number; value: FilterOptions } | null = null;
+
 // Wird im (dashboard)-Layout geladen (unabhängig von der aktuellen Filterauswahl) und an die
 // Sidebar durchgereicht, damit das Filterpanel dort - unter der Navigation - ohne eigenen
 // DB-Zugriff auskommt (Sidebar ist eine Client-Komponente).
 export async function getFilterOptions(): Promise<FilterOptions> {
+  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.value;
+
   const [kategorien1, kategorien2, kategorien3, materialien, legierungen, runs] = await Promise.all([
     distinctValues(sourceProducts.kategorieEbene1),
     distinctValues(sourceProducts.kategorieEbene2),
@@ -44,5 +52,7 @@ export async function getFilterOptions(): Promise<FilterOptions> {
       .limit(15),
   ]);
 
-  return { kategorien1, kategorien2, kategorien3, materialien, legierungen, runs };
+  const value = { kategorien1, kategorien2, kategorien3, materialien, legierungen, runs };
+  cache = { at: Date.now(), value };
+  return value;
 }

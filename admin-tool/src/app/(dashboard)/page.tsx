@@ -5,6 +5,10 @@ import { db } from "@/db/client";
 import { sourceProducts } from "@/db/schema";
 import { ProductTable, type ProductListItem } from "@/components/ProductTable";
 import { parseFilters, buildWhere, isNewArrival, PAGE_SIZE } from "@/lib/product-query";
+import { latestShopifyEvents } from "@/lib/shopify-activity";
+import { isShopifyOutOfSync } from "@/lib/shopify-sync";
+import { summarizeChanges } from "@/lib/shopify-changes";
+import { inArray } from "drizzle-orm";
 
 type SearchParams = { [key: string]: string | string[] | undefined };
 
@@ -36,6 +40,8 @@ export default async function ProductListPage({
         missingFromStockAt: sourceProducts.missingFromStockAt,
         origin: sourceProducts.origin,
         discontinued: sourceProducts.discontinued,
+        shopifyProductId: sourceProducts.shopifyProductId,
+        shopifyStatus: sourceProducts.shopifyStatus,
       })
       .from(sourceProducts)
       .where(where)
@@ -47,6 +53,19 @@ export default async function ProductListPage({
       .from(sourceProducts)
       .where(where),
   ]);
+
+  // Shopify-Kennzeichnung: neuestes Ereignis pro Produkt + "nicht aktuell" (nur für Produkte, die
+  // schon in Shopify liegen - die Abweichung wird dafür live berechnet).
+  const inShopifyIds = rows.filter((r) => r.shopifyProductId).map((r) => r.id);
+  const [events, shopifyRows] = await Promise.all([
+    latestShopifyEvents(inShopifyIds),
+    inShopifyIds.length > 0
+      ? db.select().from(sourceProducts).where(inArray(sourceProducts.id, inShopifyIds))
+      : Promise.resolve([]),
+  ]);
+  const outOfSync = new Map<number, boolean>(
+    await Promise.all(shopifyRows.map(async (p) => [p.id, await isShopifyOutOfSync(p).catch(() => false)] as const)),
+  );
 
   const products: ProductListItem[] = rows.map((r) => ({
     id: r.id,
@@ -64,6 +83,15 @@ export default async function ProductListPage({
     isMissingFromStock: r.missingFromStockAt !== null,
     isCustom: r.origin === "custom",
     isDiscontinued: r.discontinued,
+    shopifyStatus: r.shopifyProductId ? r.shopifyStatus : null,
+    shopifyOutOfSync: outOfSync.get(r.id) ?? false,
+    shopifyLastEvent: events.get(r.id)
+      ? {
+          action: events.get(r.id)!.action,
+          at: events.get(r.id)!.createdAt,
+          summary: summarizeChanges(events.get(r.id)!.changes),
+        }
+      : null,
   }));
 
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));

@@ -32,6 +32,8 @@ export type ProductFilters = {
   newArrivalOnly?: boolean;
   missingOnly?: boolean;
   customOnly?: boolean;
+  shopifyOnly?: boolean;
+  shopifyChanged?: boolean;
   page: number;
 };
 
@@ -79,6 +81,8 @@ export function parseFilters(searchParams: RawSearchParams): ProductFilters {
     newArrivalOnly: first(searchParams.newArrivalOnly) === "1" || undefined,
     missingOnly: first(searchParams.missingOnly) === "1" || undefined,
     customOnly: first(searchParams.customOnly) === "1" || undefined,
+    shopifyOnly: first(searchParams.shopifyOnly) === "1" || undefined,
+    shopifyChanged: first(searchParams.shopifyChanged) === "1" || undefined,
     page: Math.max(1, toNumberParam(first(searchParams.page)) ?? 1),
   };
 }
@@ -127,6 +131,13 @@ export function buildWhere(filters: ProductFilters): SQL | undefined {
   }
   if (filters.missingOnly) conditions.push(isNotNull(sourceProducts.missingFromStockAt));
   if (filters.customOnly) conditions.push(eq(sourceProducts.origin, "custom"));
+  if (filters.shopifyOnly) conditions.push(isNotNull(sourceProducts.shopifyProductId));
+  if (filters.shopifyChanged) {
+    // Produkte mit einem Shopify-Ereignis (Anlegen/Ändern/Archivieren/Fehler) in den letzten 72 Stunden.
+    conditions.push(
+      sql`exists (select 1 from product_audit_log a where a.source_product_id = ${sourceProducts.id} and a.action like 'shopify_%' and a.created_at > now() - interval '72 hours')`,
+    );
+  }
 
   return conditions.length > 0 ? and(...conditions) : undefined;
 }

@@ -25,6 +25,10 @@ import { loadAvailabilityRules } from "@/lib/availability-rules";
 import { DiscontinuedToggle } from "@/components/DiscontinuedToggle";
 import { ShopifyPublishSection } from "@/components/ShopifyPublishSection";
 import { shopifyAdminProductUrl } from "@/lib/shopify-client";
+import { isShopifyOutOfSync } from "@/lib/shopify-sync";
+import { listShopifyEventsFor } from "@/lib/shopify-activity";
+import { isRecent } from "@/lib/shopify-changes";
+import { ShopifyChangeDetails, ShopifyEventHeader } from "@/components/ShopifyChangeList";
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (value === null || value === undefined || value === "") return null;
@@ -82,6 +86,8 @@ export default async function ProductDetailPage({
       : Promise.resolve([]),
     isCustom ? listCategoryOptions() : Promise.resolve([]),
   ]);
+  const [shopifyOutOfSync, shopifyEvents] = await Promise.all([isShopifyOutOfSync(product), listShopifyEventsFor(product.id)]);
+  const latestShopify = shopifyEvents[0] ?? null;
   const siblings = product.designFamilyId ? await listSiblings(product.id, product.designFamilyId) : [];
   const availability = deriveAvailability(product, await loadAvailabilityRules());
   const categoryLabels = allCategories
@@ -155,6 +161,20 @@ export default async function ProductDetailPage({
           <StatusSelect id={product.id} status={product.status} />
         </div>
       </div>
+
+      {latestShopify && isRecent(latestShopify.createdAt) && (
+        <div
+          className={`rounded-lg border-2 px-4 py-3 ${
+            latestShopify.action === "shopify_error" ? "border-red-500 bg-red-50" : "border-orange-400 bg-orange-50"
+          }`}
+        >
+          <div className="mb-1 text-sm font-bold uppercase tracking-wide text-zinc-900">
+            {latestShopify.action === "shopify_error" ? "⚠ Übertragung nach Shopify fehlgeschlagen" : "↑ Dieses Produkt wurde nach Shopify geändert"}
+          </div>
+          <ShopifyEventHeader action={latestShopify.action} actor={latestShopify.actor} createdAt={latestShopify.createdAt} />
+          <ShopifyChangeDetails changes={latestShopify.changes} />
+        </div>
+      )}
 
       {missingFields.length > 0 && (
         <div className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2.5 text-sm text-orange-800">
@@ -360,11 +380,27 @@ export default async function ProductDetailPage({
         )}
       </div>
 
-      {isCustom && auditLog.length > 0 && (
+      {shopifyEvents.length > 0 && (
+        <section className={`${cardClass} border-orange-200 p-4`}>
+          <SectionHeader icon={History} title="Shopify-Verlauf (was wurde nach Shopify geändert)" />
+          <ul className="space-y-3">
+            {shopifyEvents.map((e) => (
+              <li key={e.id} className="border-b border-zinc-100 pb-2 last:border-0">
+                <ShopifyEventHeader action={e.action} actor={e.actor} createdAt={e.createdAt} />
+                <ShopifyChangeDetails changes={e.changes} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {isCustom && auditLog.filter((a) => !a.action.startsWith("shopify_")).length > 0 && (
         <section className={`${cardClass} p-4`}>
           <SectionHeader icon={History} title="Änderungsprotokoll" />
           <ul className="space-y-2 text-xs">
-            {auditLog.map((entry) => (
+            {auditLog
+              .filter((a) => !a.action.startsWith("shopify_"))
+              .map((entry) => (
               <li key={entry.id} className="border-b border-zinc-50 pb-2 last:border-0">
                 <div className="text-zinc-500">
                   {formatDateTime(entry.createdAt)} · {entry.actor} · {entry.action}
@@ -425,6 +461,7 @@ export default async function ProductDetailPage({
         shopifyStatus={product.shopifyStatus}
         syncedAt={product.shopifySyncedAt}
         syncError={product.shopifySyncError}
+        outOfSync={shopifyOutOfSync}
         adminUrl={
           product.shopifyProductId && process.env.SHOPIFY_SHOP_DOMAIN
             ? shopifyAdminProductUrl(Number(product.shopifyProductId.split("/").pop()))

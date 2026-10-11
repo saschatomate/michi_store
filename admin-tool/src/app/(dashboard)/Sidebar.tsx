@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Gem, Upload, Link2, LogOut, PlusCircle, Tags, Clock } from "lucide-react";
+import { Gem, Upload, Link2, LogOut, PlusCircle, Tags, Clock, Radio } from "lucide-react";
 import { logout } from "@/lib/auth-actions";
 import { FilterPanel } from "@/components/FilterPanel";
 import { BudgetWidget } from "@/components/BudgetWidget";
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: "/products/new", label: "Eigenes Produkt anlegen", icon: PlusCircle },
   { href: "/categories", label: "Kategorien", icon: Tags },
   { href: "/availability", label: "Lieferzeiten", icon: Clock },
+  { href: "/shopify-changes", label: "Shopify-Verlauf", icon: Radio },
   { href: "/import", label: "Import", icon: Upload },
   { href: "/mapping", label: "Mapping", icon: Link2 },
 ];
@@ -22,9 +23,11 @@ const NAV_ITEMS = [
 export function Sidebar({
   filterOptions,
   budget,
+  shopifyActivity,
 }: {
   filterOptions: FilterOptions;
   budget: BudgetSummary;
+  shopifyActivity: { changes24h: number; errors24h: number };
 }) {
   const pathname = usePathname();
 
@@ -55,6 +58,26 @@ export function Sidebar({
             >
               <Icon size={16} strokeWidth={2} />
               {item.label}
+              {item.href === "/shopify-changes" && (shopifyActivity.changes24h > 0 || shopifyActivity.errors24h > 0) && (
+                <span className="ml-auto flex items-center gap-1">
+                  {shopifyActivity.changes24h > 0 && (
+                    <span
+                      title="Änderungen in Richtung Shopify in den letzten 24 Stunden"
+                      className="rounded-full bg-orange-500 px-2 py-0.5 text-[11px] font-bold text-white"
+                    >
+                      {shopifyActivity.changes24h}
+                    </span>
+                  )}
+                  {shopifyActivity.errors24h > 0 && (
+                    <span
+                      title="Fehlgeschlagene Übertragungen in den letzten 24 Stunden"
+                      className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white"
+                    >
+                      ⚠ {shopifyActivity.errors24h}
+                    </span>
+                  )}
+                </span>
+              )}
             </Link>
           );
         })}
