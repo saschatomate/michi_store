@@ -1,16 +1,45 @@
-import { pgTable, text, integer, doublePrecision, jsonb, serial, timestamp, index, boolean } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  integer,
+  doublePrecision,
+  jsonb,
+  serial,
+  timestamp,
+  index,
+  boolean,
+  primaryKey,
+  type AnyPgColumn,
+} from "drizzle-orm/pg-core";
 
 export const STATUS_VALUES = [
+  "unvollstaendig",
   "neu",
   "ausgewaehlt",
   "in_pipeline",
   "review",
+  // Alles geprüft und für den Shop freigegeben, noch nicht übertragen.
+  "freigegeben",
+  // Erfolgreich an Shopify übertragen (als Entwurf oder aktiv, siehe shopifyStatus).
   "veroeffentlicht",
+  // Letzte Übertragung fehlgeschlagen, Text in shopifySyncError.
+  "uebertragungsfehler",
   "abgelehnt",
   "archiviert",
 ] as const;
 
 export type ProductStatus = (typeof STATUS_VALUES)[number];
+
+// "dg_import": kommt aus der Diamond-Group-Datei (CSV-Upload/FTP-Sync, Fakten gehören dem
+// Lieferanten). "custom": im Tool selbst angelegt (Editor unter /products/new, Fakten gehören uns) -
+// vom Katalog-Import und der Löschungs-Erkennung ausdrücklich ausgenommen, siehe csv-import.ts.
+export const PRODUCT_ORIGIN_VALUES = ["dg_import", "custom"] as const;
+export type ProductOrigin = (typeof PRODUCT_ORIGIN_VALUES)[number];
+
+export const STONE_ORIGIN_VALUES = ["lab_grown", "natural"] as const;
+export type StoneOrigin = (typeof STONE_ORIGIN_VALUES)[number];
+
+export type CustomImage = { url: string; path: string };
 
 export const sourceProducts = pgTable(
   "source_products",
@@ -88,6 +117,11 @@ export const sourceProducts = pgTable(
     status: text("status").$type<ProductStatus>().notNull().default("neu"),
     shopifyProductId: text("shopify_product_id"),
     sentToPipelineAt: timestamp("sent_to_pipeline_at", { withTimezone: true }),
+    // Ergebnis der Shopify-Übertragung (shopifyProductId ist die GraphQL-GID, damit spätere
+    // Übertragungen dasselbe Produkt aktualisieren statt ein zweites anzulegen).
+    shopifyStatus: text("shopify_status"), // draft | active
+    shopifySyncedAt: timestamp("shopify_synced_at", { withTimezone: true }),
+    shopifySyncError: text("shopify_sync_error"),
 
     // Welcher Import-Lauf diesen Artikel zuerst angelegt hat (nur bei INSERT gesetzt, bleibt bei
     // Re-Import/Update unangetastet - siehe PRESERVE_ON_CONFLICT in csv-import.ts). NULL bei
@@ -125,11 +159,33 @@ export const sourceProducts = pgTable(
     // Kategoriedaten später ändern.
     assignedModelKey: text("assigned_model_key"),
 
+    // Eigene Produkte (origin = "custom"): zusätzliche Fakten, die die DG-Datei nicht kennt. Bei
+    // DG-Artikeln bleiben sie NULL. Die Werte werden nur von Menschen im Editor gepflegt, nie von
+    // der KI (siehe custom-product.ts); bestehende Felder (hauptmaterial, legierung, caratur,
+    // diamantFarbe/-Reinheit/-Schliffguete, uvp, ...) werden mit denselben Vokabeln wie bei DG-
+    // Artikeln mitgenutzt, damit Filter, Textgenerierung und Bildpipeline unverändert greifen.
+    origin: text("origin").$type<ProductOrigin>().notNull().default("dg_import"),
+    stoneOrigin: text("stone_origin").$type<StoneOrigin>(),
+    fineness: integer("fineness"), // Feingehalt: 333 | 585 | 750
+    rhodiniert: boolean("rhodiniert"),
+    cutShape: text("cut_shape"), // Schliffform (Rund, Oval, ...) - getrennt von diamantSchliffguete
+    mainStoneCt: doublePrecision("main_stone_ct"), // Hauptstein; caratur = Gesamtgewicht
+    certInstitute: text("cert_institute"),
+    certNumber: text("cert_number"),
+    // Manueller Schalter "nicht mehr lieferbar": DG liefert dafür kein eigenes Signal (Bestand 0 und
+    // "fehlt in der Datei" bedeuten nur "nicht vorrätig", nicht "ausgelistet"). Ausgelistete Produkte
+    // werden nicht mehr verkauft/übertragen (siehe availability.ts).
+    discontinued: boolean("discontinued").notNull().default(false),
+    designFamilyId: text("design_family_id"),
+    ringSizes: jsonb("ring_sizes").$type<string[]>(),
+    customImages: jsonb("custom_images").$type<CustomImage[]>(),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("status_idx").on(table.status),
+    index("origin_idx").on(table.origin),
     index("kategorie_ebene1_idx").on(table.kategorieEbene1),
     index("hauptmaterial_idx").on(table.hauptmaterial),
     index("bestand_idx").on(table.bestand),
@@ -230,4 +286,67 @@ export const importRuns = pgTable("import_runs", {
   rowsError: integer("rows_error").notNull().default(0),
   status: text("status").notNull().default("running"), // running | success | failed
   errorMessage: text("error_message"),
+});
+
+// Menübaum des Shops (Kategorie -> Zwischenkategorie -> Produktart ...), beliebig tief über
+// parentId. Neue Kategorien sind reine Datensätze, kein Code nötig.
+export const categories = pgTable(
+  "categories",
+  {
+    id: serial("id").primaryKey(),
+    parentId: integer("parent_id").references((): AnyPgColumn => categories.id),
+    name: text("name").notNull(),
+    slug: text("slug").notNull().unique(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    active: boolean("active").notNull().default(true),
+    // Zuordnungsregeln (optional): ein Produkt wird dieser Kategorie VORGESCHLAGEN, wenn alle
+    // gesetzten Regeln der Kategorie und ihrer Eltern passen. Kategorien ganz ohne Regel (z.B.
+    // Private Jewellery, Zwischenkategorien wie Amalfi) werden nie vorgeschlagen, nur von Hand
+    // vergeben. Die endgültige Zuordnung trifft immer der Mensch im Editor.
+    shopifyCollectionId: text("shopify_collection_id"),
+    ruleStoneOrigin: text("rule_stone_origin").$type<StoneOrigin>(),
+    ruleProductType: text("rule_product_type"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("categories_parent_idx").on(table.parentId)],
+);
+
+export const productCategories = pgTable(
+  "product_categories",
+  {
+    sourceProductId: integer("source_product_id")
+      .notNull()
+      .references(() => sourceProducts.id, { onDelete: "cascade" }),
+    categoryId: integer("category_id")
+      .notNull()
+      .references(() => categories.id, { onDelete: "cascade" }),
+  },
+  (table) => [primaryKey({ columns: [table.sourceProductId, table.categoryId] })],
+);
+
+// Änderungsprotokoll (append-only): wer hat wann welches Feld von was auf was geändert.
+export const productAuditLog = pgTable(
+  "product_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    sourceProductId: integer("source_product_id")
+      .notNull()
+      .references(() => sourceProducts.id, { onDelete: "cascade" }),
+    action: text("action").notNull(), // created | updated | images | status
+    changes: jsonb("changes").$type<Record<string, { from: unknown; to: unknown }>>(),
+    actor: text("actor").notNull().default("admin"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("product_audit_log_product_idx").on(table.sourceProductId)],
+);
+
+// Lieferzeit-Regeln (konfigurierbar in der Oberfläche statt im Code): "in_stock" (Lagerware),
+// "lab_grown"/"natural" (Anfertigung je nach Steinherkunft), "shipping" (Versand nach Fertigstellung,
+// Werktage). unit: days | weeks | workdays.
+export const availabilityRules = pgTable("availability_rules", {
+  key: text("key").primaryKey(),
+  unit: text("unit").notNull(),
+  minValue: integer("min_value").notNull(),
+  maxValue: integer("max_value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

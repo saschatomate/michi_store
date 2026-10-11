@@ -99,6 +99,22 @@ async function shopifyRequest<T>(method: "GET" | "POST" | "PUT" | "DELETE", path
   return parsed as T;
 }
 
+// GraphQL Admin API (für alles Neue; die REST-Produkt-API oben ist Legacy und bleibt nur für den
+// bestehenden Verbindungstest). Gibt bei GraphQL-Fehlern (errors[]) eine Exception mit Details.
+export async function shopifyGraphql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+  const url = `https://${shopDomain()}/admin/api/${apiVersion()}/graphql.json`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "X-Shopify-Access-Token": await accessToken(), "Content-Type": "application/json" },
+    body: JSON.stringify({ query, variables }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Shopify GraphQL-Fehler ${res.status}: ${text.slice(0, 500)}`);
+  const parsed = JSON.parse(text) as { data?: T; errors?: unknown };
+  if (parsed.errors) throw new Error(`Shopify GraphQL-Fehler: ${JSON.stringify(parsed.errors).slice(0, 800)}`);
+  return parsed.data as T;
+}
+
 export type ShopifyImageInput = { src: string };
 
 export type ShopifyVariantInput = {
@@ -152,4 +168,92 @@ export async function deleteShopifyProduct(id: number): Promise<void> {
 
 export function shopifyAdminProductUrl(id: number): string {
   return `https://${shopDomain()}/admin/products/${id}`;
+}
+
+// --- GraphQL-Bausteine für die Produktübertragung (siehe shopify-sync.ts) ----------------------
+
+export type ShopifyUserError = { field?: string[] | null; message: string };
+
+function throwOnUserErrors(context: string, errors: ShopifyUserError[] | undefined) {
+  if (errors && errors.length > 0) {
+    throw new Error(`${context}: ${errors.map((e) => `${e.field?.join(".") ?? ""} ${e.message}`.trim()).join(" | ")}`);
+  }
+}
+
+export type ProductSetResult = {
+  id: string;
+  handle: string;
+  status: string;
+  variants: { id: string; sku: string | null }[];
+};
+
+// productSet legt an (ohne identifier) oder aktualisiert (mit identifier.id) in einem Aufruf -
+// Optionen, Varianten, Metafields, Medien und Kollektionen inklusive. synchronous: Ergebnis liegt
+// vor, wenn die Antwort kommt.
+export async function shopifyProductSet(
+  input: Record<string, unknown>,
+  existingId: string | null,
+): Promise<ProductSetResult> {
+  const data = await shopifyGraphql<{
+    productSet: {
+      product: { id: string; handle: string; status: string; variants: { nodes: { id: string; sku: string | null }[] } } | null;
+      userErrors: ShopifyUserError[];
+    };
+  }>(
+    `mutation ProductSet($input: ProductSetInput!, $identifier: ProductSetIdentifiers) {
+      productSet(input: $input, identifier: $identifier, synchronous: true) {
+        product { id handle status variants(first: 100) { nodes { id sku } } }
+        userErrors { field message }
+      }
+    }`,
+    { input, identifier: existingId ? { id: existingId } : undefined },
+  );
+  throwOnUserErrors("Shopify productSet", data.productSet.userErrors);
+  const product = data.productSet.product;
+  if (!product) throw new Error("Shopify productSet lieferte kein Produkt zurück.");
+  return { id: product.id, handle: product.handle, status: product.status, variants: product.variants.nodes };
+}
+
+export async function shopifyEnsureCollection(handle: string, title: string): Promise<string> {
+  const found = await shopifyGraphql<{ collections: { nodes: { id: string }[] } }>(
+    `query($q: String!) { collections(first: 1, query: $q) { nodes { id } } }`,
+    { q: `handle:${handle}` },
+  );
+  if (found.collections.nodes[0]) return found.collections.nodes[0].id;
+
+  const created = await shopifyGraphql<{
+    collectionCreate: { collection: { id: string } | null; userErrors: ShopifyUserError[] };
+  }>(
+    `mutation($input: CollectionInput!) {
+      collectionCreate(input: $input) { collection { id } userErrors { field message } }
+    }`,
+    { input: { title, handle } },
+  );
+  throwOnUserErrors("Shopify collectionCreate", created.collectionCreate.userErrors);
+  if (!created.collectionCreate.collection) throw new Error("Shopify collectionCreate lieferte keine Kollektion.");
+  return created.collectionCreate.collection.id;
+}
+
+// Veröffentlicht Produkt/Kollektion in allen Vertriebskanälen (z.B. Online Store) - ohne das ist ein
+// aktives Produkt zwar angelegt, aber für Kunden nicht sichtbar.
+export async function shopifyPublishEverywhere(resourceId: string): Promise<void> {
+  const pubs = await shopifyGraphql<{ publications: { nodes: { id: string }[] } }>(
+    `{ publications(first: 20) { nodes { id } } }`,
+  );
+  if (pubs.publications.nodes.length === 0) return;
+  const res = await shopifyGraphql<{ publishablePublish: { userErrors: ShopifyUserError[] } }>(
+    `mutation($id: ID!, $input: [PublicationInput!]!) {
+      publishablePublish(id: $id, input: $input) { userErrors { field message } }
+    }`,
+    { id: resourceId, input: pubs.publications.nodes.map((p) => ({ publicationId: p.id })) },
+  );
+  throwOnUserErrors("Shopify publishablePublish", res.publishablePublish.userErrors);
+}
+
+export async function shopifyDeleteProduct(id: string): Promise<void> {
+  const res = await shopifyGraphql<{ productDelete: { userErrors: ShopifyUserError[] } }>(
+    `mutation($input: ProductDeleteInput!) { productDelete(input: $input) { userErrors { field message } } }`,
+    { input: { id } },
+  );
+  throwOnUserErrors("Shopify productDelete", res.productDelete.userErrors);
 }

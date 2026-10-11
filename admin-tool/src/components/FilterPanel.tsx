@@ -37,6 +37,7 @@ type Overrides = Partial<{
   importRunId: number | undefined;
   newArrivalOnly: boolean | undefined;
   missingOnly: boolean | undefined;
+  customOnly: boolean | undefined;
 }>;
 
 function filterHref(filters: ProductFilters, overrides: Overrides) {
@@ -57,6 +58,7 @@ function filterHref(filters: ProductFilters, overrides: Overrides) {
   if (merged.importRunId !== undefined) params.set("importRunId", String(merged.importRunId));
   if (merged.newArrivalOnly) params.set("newArrivalOnly", "1");
   if (merged.missingOnly) params.set("missingOnly", "1");
+  if (merged.customOnly) params.set("customOnly", "1");
   const qs = params.toString();
   return qs ? `/?${qs}` : "/";
 }
@@ -149,6 +151,13 @@ function buildChips(filters: ProductFilters, importRunLabel: string | null) {
       key: "missingOnly",
       label: "Nicht mehr im Bestand",
       href: filterHref(filters, { missingOnly: undefined }),
+    });
+  }
+  if (filters.customOnly) {
+    chips.push({
+      key: "customOnly",
+      label: "Nur eigene Produkte",
+      href: filterHref(filters, { customOnly: undefined }),
     });
   }
 
@@ -274,6 +283,11 @@ export function FilterPanel({ options }: { options: FilterOptions }) {
               label="Nur nicht mehr im Bestand"
               name="missingOnly"
               checked={filters.missingOnly ?? false}
+            />
+            <BooleanFilter
+              label="Nur eigene Produkte"
+              name="customOnly"
+              checked={filters.customOnly ?? false}
             />
           </div>
         </FilterGroup>

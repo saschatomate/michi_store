@@ -39,3 +39,23 @@ export async function deleteGeneratedImage(path: string): Promise<void> {
   const storage = storageClient();
   await storage.from(BUCKET).remove([path]);
 }
+
+// Direkt-Upload vom Browser (Originalqualität, kein Umweg über den Server-Action-Body, der bei
+// 1 MB bzw. auf Vercel bei 4,5 MB endet): der Server erzeugt nur eine signierte Upload-URL, der
+// Browser lädt die Datei selbst dorthin hoch. Wird für selbst hochgeladene Produktbilder genutzt.
+export async function createSignedImageUpload(path: string): Promise<{ signedUrl: string; path: string }> {
+  const { data, error } = await storageClient().from(BUCKET).createSignedUploadUrl(path);
+  if (error || !data) {
+    throw new Error(`Signierte Upload-URL konnte nicht erzeugt werden: ${error?.message ?? "unbekannter Fehler"}`);
+  }
+  return { signedUrl: data.signedUrl, path: data.path };
+}
+
+export function publicImageUrl(path: string): string {
+  return storageClient().from(BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+export async function removeStoredImages(paths: string[]): Promise<void> {
+  if (paths.length === 0) return;
+  await storageClient().from(BUCKET).remove(paths);
+}

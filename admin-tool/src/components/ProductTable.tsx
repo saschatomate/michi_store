@@ -23,6 +23,8 @@ export type ProductListItem = {
   thumbnailUrl: string | null;
   isNewArrival: boolean;
   isMissingFromStock: boolean;
+  isCustom: boolean;
+  isDiscontinued: boolean;
 };
 
 const currencyFormatter = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
@@ -186,6 +188,19 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
                     >
                       {p.kurzBezeichnungDe ?? p.modellErweitert}
                     </Link>
+                    {p.isDiscontinued && (
+                      <span className="inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
+                        AUSGELISTET
+                      </span>
+                    )}
+                    {p.isCustom && (
+                      <span
+                        title="Im Tool selbst angelegtes Produkt (nicht aus der Diamond-Group-Datei)"
+                        className="inline-flex items-center rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700"
+                      >
+                        EIGENES PRODUKT
+                      </span>
+                    )}
                     {p.isNewArrival && (
                       <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
                         NEU

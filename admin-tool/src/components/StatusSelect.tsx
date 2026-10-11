@@ -13,7 +13,19 @@ export function StatusSelect({ id, status }: { id: number; status: ProductStatus
     <select
       defaultValue={status}
       disabled={isPending}
-      onChange={(e) => startTransition(() => updateProductStatus(id, e.target.value as ProductStatus))}
+      onChange={(e) => {
+        const next = e.target.value as ProductStatus;
+        startTransition(async () => {
+          try {
+            await updateProductStatus(id, next);
+          } catch (err) {
+            // Sperren (z.B. "Daten unvollständig") sollen als Hinweis erscheinen, nicht die Seite
+            // in die Fehleransicht werfen; Auswahl zurück auf den gespeicherten Status.
+            window.alert(err instanceof Error ? err.message : String(err));
+            e.target.value = status;
+          }
+        });
+      }}
       className={`${selectClass} disabled:opacity-50`}
     >
       {STATUS_VALUES.map((s) => (

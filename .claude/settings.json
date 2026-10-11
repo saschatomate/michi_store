@@ -104,7 +104,10 @@
       "Bash(node test-thumbnails.mjs)",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('\\\\n'.join\\(sorted\\(list\\(d.get\\('dependencies',{}\\).keys\\(\\)\\)+list\\(d.get\\('devDependencies',{}\\).keys\\(\\)\\)\\)\\)\\)\")",
       "Bash(git check-ignore *)",
-      "WebFetch(domain:shopify.dev)"
+      "WebFetch(domain:shopify.dev)",
+      "Bash(grep -v -E '\\\\.\\(png|jpg|jpeg|webp\\)$')",
+      "Bash(iconv -f latin1 -t utf8)",
+      "Bash(python3 -)"
     ],
     "additionalDirectories": [
       "/private/tmp/claude-501/-Users-saschas-Documents-repos-Michi/2c1ead16-5dda-44e6-a094-339451dad8e5/scratchpad",

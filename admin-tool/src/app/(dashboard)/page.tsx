@@ -34,6 +34,8 @@ export default async function ProductListPage({
         bildUrls: sourceProducts.bildUrls,
         newArrivalAt: sourceProducts.newArrivalAt,
         missingFromStockAt: sourceProducts.missingFromStockAt,
+        origin: sourceProducts.origin,
+        discontinued: sourceProducts.discontinued,
       })
       .from(sourceProducts)
       .where(where)
@@ -60,6 +62,8 @@ export default async function ProductListPage({
     thumbnailUrl: r.freistellerUrl ?? r.bildUrls?.[0] ?? null,
     isNewArrival: isNewArrival(r.newArrivalAt),
     isMissingFromStock: r.missingFromStockAt !== null,
+    isCustom: r.origin === "custom",
+    isDiscontinued: r.discontinued,
   }));
 
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));

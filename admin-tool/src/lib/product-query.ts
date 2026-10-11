@@ -31,6 +31,7 @@ export type ProductFilters = {
   status?: ProductStatus;
   newArrivalOnly?: boolean;
   missingOnly?: boolean;
+  customOnly?: boolean;
   page: number;
 };
 
@@ -77,6 +78,7 @@ export function parseFilters(searchParams: RawSearchParams): ProductFilters {
     status,
     newArrivalOnly: first(searchParams.newArrivalOnly) === "1" || undefined,
     missingOnly: first(searchParams.missingOnly) === "1" || undefined,
+    customOnly: first(searchParams.customOnly) === "1" || undefined,
     page: Math.max(1, toNumberParam(first(searchParams.page)) ?? 1),
   };
 }
@@ -124,6 +126,7 @@ export function buildWhere(filters: ProductFilters): SQL | undefined {
     conditions.push(gte(sourceProducts.newArrivalAt, sql`now() - interval '${sql.raw(String(NEW_ARRIVAL_WINDOW_DAYS))} days'`));
   }
   if (filters.missingOnly) conditions.push(isNotNull(sourceProducts.missingFromStockAt));
+  if (filters.customOnly) conditions.push(eq(sourceProducts.origin, "custom"));
 
   return conditions.length > 0 ? and(...conditions) : undefined;
 }

@@ -1,30 +1,39 @@
 import type { ProductStatus } from "@/db/schema";
 
 const STATUS_LABELS: Record<ProductStatus, string> = {
+  unvollstaendig: "Daten unvollständig",
   neu: "Neu",
   ausgewaehlt: "Ausgewählt",
   in_pipeline: "In Pipeline",
   review: "Review offen",
+  freigegeben: "Freigegeben",
+  uebertragungsfehler: "Übertragungsfehler",
   veroeffentlicht: "Veröffentlicht",
   abgelehnt: "Abgelehnt",
   archiviert: "Archiviert",
 };
 
 const STATUS_STYLES: Record<ProductStatus, string> = {
+  unvollstaendig: "bg-orange-50 text-orange-700",
   neu: "bg-zinc-100 text-zinc-600",
   ausgewaehlt: "bg-blue-50 text-blue-700",
   in_pipeline: "bg-amber-50 text-amber-700",
   review: "bg-violet-50 text-violet-700",
+  freigegeben: "bg-sky-50 text-sky-700",
+  uebertragungsfehler: "bg-red-50 text-red-700",
   veroeffentlicht: "bg-emerald-50 text-emerald-700",
   abgelehnt: "bg-red-50 text-red-700",
   archiviert: "bg-zinc-100 text-zinc-500",
 };
 
 const STATUS_DOT: Record<ProductStatus, string> = {
+  unvollstaendig: "bg-orange-500",
   neu: "bg-zinc-400",
   ausgewaehlt: "bg-blue-500",
   in_pipeline: "bg-amber-500",
   review: "bg-violet-500",
+  freigegeben: "bg-sky-500",
+  uebertragungsfehler: "bg-red-500",
   veroeffentlicht: "bg-emerald-500",
   abgelehnt: "bg-red-500",
   archiviert: "bg-zinc-400",

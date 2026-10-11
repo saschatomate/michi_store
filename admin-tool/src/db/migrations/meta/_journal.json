@@ -64,6 +64,34 @@
       "when": 1787856871076,
       "tag": "0008_mature_slapstick",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791731681187,
+      "tag": "0009_cool_champions",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791732333388,
+      "tag": "0010_great_ted_forrester",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791732973635,
+      "tag": "0011_massive_vindicator",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791733232016,
+      "tag": "0012_typical_swarm",
+      "breakpoints": true
     }
   ]
 }

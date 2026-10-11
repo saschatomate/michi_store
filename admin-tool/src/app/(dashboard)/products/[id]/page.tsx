@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { eq } from "drizzle-orm";
-import { ArrowLeft, BadgeCheck, Box, Gem, Sparkles, Wallet } from "lucide-react";
+import { desc, eq } from "drizzle-orm";
+import { ArrowLeft, BadgeCheck, Box, Clock, Gem, History, Pencil, Sparkles, Wallet } from "lucide-react";
 import { db } from "@/db/client";
-import { sourceProducts, productGeneratedImages } from "@/db/schema";
+import { sourceProducts, productGeneratedImages, productAuditLog, productCategories } from "@/db/schema";
 import { StatusSelect } from "@/components/StatusSelect";
 import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { GeneratedContentSection } from "@/components/GeneratedContentSection";
@@ -16,6 +16,15 @@ import { defaultImageBasePrompt, resolveModel } from "@/lib/image-generation";
 import { hasCompositingSupport } from "@/lib/image-compositing";
 import { MARINELL_MODELS, type ModelKey } from "@/lib/image-facts";
 import { getLatestCostsForProduct } from "@/lib/cost-tracking";
+import { listCategoryOptions } from "@/lib/categories";
+import { listSiblings } from "@/lib/design-family";
+import { FIELD_LABELS, getMissingFields, STONE_ORIGIN_LABELS } from "@/lib/custom-product";
+import { buttonSecondary } from "@/lib/ui";
+import { deriveAvailability } from "@/lib/availability";
+import { loadAvailabilityRules } from "@/lib/availability-rules";
+import { DiscontinuedToggle } from "@/components/DiscontinuedToggle";
+import { ShopifyPublishSection } from "@/components/ShopifyPublishSection";
+import { shopifyAdminProductUrl } from "@/lib/shopify-client";
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (value === null || value === undefined || value === "") return null;
@@ -52,12 +61,35 @@ export default async function ProductDetailPage({
   });
   if (!product) notFound();
 
-  const [generatedImages, generationCosts] = await Promise.all([
+  const isCustom = product.origin === "custom";
+  const [generatedImages, generationCosts, auditLog, assignedCategories, allCategories] = await Promise.all([
     db.query.productGeneratedImages.findMany({
       where: eq(productGeneratedImages.sourceProductId, product.id),
     }),
     getLatestCostsForProduct(product.id),
+    isCustom
+      ? db.query.productAuditLog.findMany({
+          where: eq(productAuditLog.sourceProductId, product.id),
+          orderBy: desc(productAuditLog.createdAt),
+          limit: 30,
+        })
+      : Promise.resolve([]),
+    isCustom
+      ? db
+          .select({ id: productCategories.categoryId })
+          .from(productCategories)
+          .where(eq(productCategories.sourceProductId, product.id))
+      : Promise.resolve([]),
+    isCustom ? listCategoryOptions() : Promise.resolve([]),
   ]);
+  const siblings = product.designFamilyId ? await listSiblings(product.id, product.designFamilyId) : [];
+  const availability = deriveAvailability(product, await loadAvailabilityRules());
+  const categoryLabels = allCategories
+    .filter((c) => assignedCategories.some((a) => a.id === c.id))
+    .map((c) => c.label);
+  const missingFields = isCustom
+    ? getMissingFields(product, product.customImages?.length ?? 0, assignedCategories.length)
+    : [];
 
   const raw = product.rawJson ?? {};
   const diamonds = diamondSlots(raw);
@@ -93,6 +125,11 @@ export default async function ProductDetailPage({
                 GIA-Zertifikat: {product.giaZertifikatNr}
               </span>
             )}
+            {isCustom && (
+              <span className="inline-flex items-center rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+                EIGENES PRODUKT
+              </span>
+            )}
             {isNewArrival(product.newArrivalAt) && (
               <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                 NEU ERSCHIENEN
@@ -108,8 +145,25 @@ export default async function ProductDetailPage({
             )}
           </div>
         </div>
-        <StatusSelect id={product.id} status={product.status} />
+        <div className="flex items-center gap-2">
+          {isCustom && (
+            <Link href={`/products/${product.id}/edit`} className={buttonSecondary}>
+              <Pencil size={14} />
+              Bearbeiten
+            </Link>
+          )}
+          <StatusSelect id={product.id} status={product.status} />
+        </div>
       </div>
+
+      {missingFields.length > 0 && (
+        <div className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2.5 text-sm text-orange-800">
+          <strong>Daten unvollständig:</strong> {missingFields.map((m) => FIELD_LABELS[m] ?? m).join(", ")}.{" "}
+          <Link href={`/products/${product.id}/edit`} className="font-medium underline">
+            Jetzt ergänzen
+          </Link>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <section className={`${cardClass} p-4`}>
@@ -132,6 +186,83 @@ export default async function ProductDetailPage({
         </section>
 
         <ProductImageGallery images={images} />
+
+        <section className={`${cardClass} p-4`}>
+          <SectionHeader icon={Clock} title="Verfügbarkeit" />
+          <p className={`text-sm font-medium ${availability.sellable ? "text-zinc-900" : "text-red-700"}`}>
+            {availability.label}
+          </p>
+          {availability.warnings.map((w) => (
+            <p key={w} className="mt-1.5 text-xs text-amber-700">
+              {w}
+            </p>
+          ))}
+          {availability.variants.length > 0 && (
+            <div className="mt-3">
+              <div className="mb-1.5 text-xs text-zinc-500">Ringgrößen (Varianten im Shop)</div>
+              <div className="flex flex-wrap gap-1.5">
+                {availability.variants.map((v) => (
+                  <span
+                    key={v.size}
+                    title={v.label}
+                    className={`rounded-md px-2 py-0.5 text-xs font-medium ${
+                      v.mode === "in_stock" ? "bg-emerald-100 text-emerald-800" : "bg-zinc-100 text-zinc-600"
+                    }`}
+                  >
+                    {v.size}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[11px] text-zinc-400">Grün = Lagerware, grau = Anfertigung.</p>
+            </div>
+          )}
+          <div className="mt-3">
+            <DiscontinuedToggle id={product.id} discontinued={product.discontinued} />
+          </div>
+        </section>
+
+        {isCustom && (
+          <section className={`${cardClass} p-4`}>
+            <SectionHeader icon={Gem} title="Eigene Produktdaten" />
+            <dl className="grid grid-cols-2 gap-3">
+              <Field label="Herkunft Stein" value={product.stoneOrigin ? STONE_ORIGIN_LABELS[product.stoneOrigin] : null} />
+              <Field label="Feingehalt" value={product.fineness} />
+              <Field
+                label="Rhodiniert"
+                value={product.rhodiniert === null ? null : product.rhodiniert ? "Ja" : "Nein"}
+              />
+              <Field label="Schliffform" value={product.cutShape} />
+              <Field label="Hauptstein (ct)" value={product.mainStoneCt} />
+              <Field label="Gesamtgewicht (ct)" value={product.caratur} />
+              <Field
+                label="Zertifikat"
+                value={product.certInstitute ? `${product.certInstitute} ${product.certNumber ?? ""}`.trim() : null}
+              />
+              <Field label="Design-Family-ID" value={product.designFamilyId} />
+              <Field label="Ringgrößen" value={product.ringSizes?.join(", ")} />
+              <Field label="Kategorien" value={categoryLabels.join(" | ")} />
+            </dl>
+            {product.designFamilyId && (
+              <div className="mt-3 border-t border-zinc-100 pt-3">
+                <div className="mb-1 text-xs text-zinc-500">Weitere Ausführungen dieses Designs</div>
+                {siblings.length === 0 ? (
+                  <p className="text-xs text-zinc-400">Noch keine – dieses Produkt ist bisher allein in der Familie.</p>
+                ) : (
+                  <ul className="space-y-0.5 text-sm">
+                    {siblings.map((m) => (
+                      <li key={m.id}>
+                        <Link href={`/products/${m.id}`} className="text-indigo-600 hover:underline">
+                          {m.name}
+                        </Link>
+                        {m.detail && <span className="text-xs text-zinc-500"> – {m.detail}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         <section className={`${cardClass} p-4`}>
           <SectionHeader icon={Wallet} title="Preise, Bestand & Verlauf" />
@@ -229,6 +360,30 @@ export default async function ProductDetailPage({
         )}
       </div>
 
+      {isCustom && auditLog.length > 0 && (
+        <section className={`${cardClass} p-4`}>
+          <SectionHeader icon={History} title="Änderungsprotokoll" />
+          <ul className="space-y-2 text-xs">
+            {auditLog.map((entry) => (
+              <li key={entry.id} className="border-b border-zinc-50 pb-2 last:border-0">
+                <div className="text-zinc-500">
+                  {formatDateTime(entry.createdAt)} · {entry.actor} · {entry.action}
+                </div>
+                {entry.changes && (
+                  <ul className="mt-0.5 text-zinc-700">
+                    {Object.entries(entry.changes).map(([field, c]) => (
+                      <li key={field}>
+                        <span className="font-medium">{field}</span>: {JSON.stringify(c.from)} → {JSON.stringify(c.to)}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <GeneratedContentSection
         id={product.id}
         status={product.status}
@@ -262,6 +417,19 @@ export default async function ProductDetailPage({
         compositingSupportedModelKeys={Object.keys(MARINELL_MODELS).filter((key) =>
           hasCompositingSupport(key, product.hauptkategorie),
         )}
+      />
+
+      <ShopifyPublishSection
+        id={product.id}
+        status={product.status}
+        shopifyStatus={product.shopifyStatus}
+        syncedAt={product.shopifySyncedAt}
+        syncError={product.shopifySyncError}
+        adminUrl={
+          product.shopifyProductId && process.env.SHOPIFY_SHOP_DOMAIN
+            ? shopifyAdminProductUrl(Number(product.shopifyProductId.split("/").pop()))
+            : null
+        }
       />
     </div>
   );

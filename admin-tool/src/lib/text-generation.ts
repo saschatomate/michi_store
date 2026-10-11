@@ -63,6 +63,10 @@ Regeln:
   Modellcode und ohne Eigennamen von Personen.
 - Ton: leise, diskret, warm - niemals reißerisch, niemals lautstarke Superlative ("atemberaubend",
   "spektakulär"). Zurückhaltung ist bei MARINELL selbst ein Qualitätsmerkmal.
+- Ist "steinHerkunft" angegeben, gilt sie absolut: Ein Labordiamant wird nie als natürlich oder
+  "Naturdiamant" bezeichnet und umgekehrt. Schliffform (schliffform), Hauptstein-Gewicht
+  (hauptsteinCt), Rhodinierung (rhodiniert) und Zertifikat (zertifikat) sind feste Fakten - nichts
+  davon darf ergänzt, verändert oder geschätzt werden; fehlt ein Wert, erwähne ihn nicht.
 - Wenn eine GIA-Zertifikatsnummer angegeben ist, hebe sie explizit hervor (starkes Vertrauensargument
   bei einem Vertrauensgut) - eingebettet in einen Satz über Sorgfalt/Qualität, nicht als trockene
   Aufzählung. GIA-zertifizierte Naturdiamanten gehören zur "MARINELL Fine Jewellery Collection"; ohne
@@ -105,6 +109,26 @@ function buildProductFacts(product: SourceProductRow): Record<string, unknown> {
     staerke: product.staerke,
     produktLaengeCm: product.produktLaengeCm,
     giaZertifikatNr: product.giaZertifikatNr,
+    // Nur bei selbst angelegten Produkten befüllt (im Editor von Menschen gepflegt, Fakten für die
+    // KI gesperrt); bei DG-Artikeln sind diese Felder NULL und werden weggelassen.
+    ...(product.origin === "custom"
+      ? {
+          steinHerkunft:
+            product.stoneOrigin === "lab_grown"
+              ? "Labordiamant"
+              : product.stoneOrigin === "natural"
+                ? "Natürlicher Diamant"
+                : null,
+          schliffform: product.cutShape,
+          hauptsteinCt: product.mainStoneCt,
+          feingehalt: product.fineness,
+          rhodiniert: product.rhodiniert,
+          zertifikat:
+            product.certInstitute && product.certNumber
+              ? `${product.certInstitute} ${product.certNumber}`
+              : null,
+        }
+      : {}),
   };
 }
 

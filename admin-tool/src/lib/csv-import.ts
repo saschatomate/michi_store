@@ -289,11 +289,20 @@ export async function importCsvBuffer(
   if (options?.detectDeletions && parsedRows.length > 0) {
     const currentSkus = Array.from(parsedByModell.keys());
 
-    const [{ totalCount }] = await db.select({ totalCount: sql<number>`count(*)::int` }).from(sourceProducts);
+    // Eigene Produkte (origin = "custom") kommen nie in der DG-Datei vor und dürfen deshalb weder in
+    // die Gesamtzahl noch in die "fehlt"-Markierung einfließen.
+    const isDgImport = eq(sourceProducts.origin, "dg_import");
+
+    const [{ totalCount }] = await db
+      .select({ totalCount: sql<number>`count(*)::int` })
+      .from(sourceProducts)
+      .where(isDgImport);
     const [{ missingCount }] = await db
       .select({ missingCount: sql<number>`count(*)::int` })
       .from(sourceProducts)
-      .where(and(isNull(sourceProducts.missingFromStockAt), notInArray(sourceProducts.modellErweitert, currentSkus)));
+      .where(
+        and(isDgImport, isNull(sourceProducts.missingFromStockAt), notInArray(sourceProducts.modellErweitert, currentSkus)),
+      );
 
     if (missingCount > 0) {
       if (missingCount > totalCount * DELETION_SAFETY_THRESHOLD) {
@@ -307,7 +316,11 @@ export async function importCsvBuffer(
           .update(sourceProducts)
           .set({ missingFromStockAt: new Date() })
           .where(
-            and(isNull(sourceProducts.missingFromStockAt), notInArray(sourceProducts.modellErweitert, currentSkus)),
+            and(
+              isDgImport,
+              isNull(sourceProducts.missingFromStockAt),
+              notInArray(sourceProducts.modellErweitert, currentSkus),
+            ),
           );
       }
     }

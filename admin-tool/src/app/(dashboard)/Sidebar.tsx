@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Gem, Upload, Link2, LogOut } from "lucide-react";
+import { Gem, Upload, Link2, LogOut, PlusCircle, Tags, Clock } from "lucide-react";
 import { logout } from "@/lib/auth-actions";
 import { FilterPanel } from "@/components/FilterPanel";
 import { BudgetWidget } from "@/components/BudgetWidget";
@@ -12,6 +12,9 @@ import type { BudgetSummary } from "@/lib/cost-tracking";
 
 const NAV_ITEMS = [
   { href: "/", label: "Produkte", icon: Gem },
+  { href: "/products/new", label: "Eigenes Produkt anlegen", icon: PlusCircle },
+  { href: "/categories", label: "Kategorien", icon: Tags },
+  { href: "/availability", label: "Lieferzeiten", icon: Clock },
   { href: "/import", label: "Import", icon: Upload },
   { href: "/mapping", label: "Mapping", icon: Link2 },
 ];
