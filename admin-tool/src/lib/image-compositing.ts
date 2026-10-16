@@ -8,7 +8,7 @@ import { describeChainForImagePrompt, verifyPendantIntact } from "@/lib/text-gen
 
 type SourceProductRow = typeof sourceProducts.$inferSelect;
 
-const OPENAI_IMAGE_MODEL = "gpt-image-1.5";
+const OPENAI_IMAGE_MODEL = "gpt-image-2";
 
 // BEWUSST dynamischer Import statt "import sharp from 'sharp'" oben: ein statischer Top-Level-
 // Import hätte sharp bei JEDEM Laden dieses Moduls sofort ausgewertet - und damit bei JEDEM Aufruf

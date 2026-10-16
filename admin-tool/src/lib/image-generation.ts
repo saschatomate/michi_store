@@ -15,7 +15,7 @@ import { diamondSlots, coloredStoneSlots } from "@/lib/product-facts";
 
 type SourceProductRow = typeof sourceProducts.$inferSelect;
 
-const OPENAI_IMAGE_MODEL = "gpt-image-1.5";
+const OPENAI_IMAGE_MODEL = "gpt-image-2";
 
 // MARINELL Editorial-Fotografie (aus "01 MARINELL Brand DNA.docx"): leise, warme, zeitlose
 // Bildsprache statt lauter Statussymbolik. Großzügiger, eleganter Bildausschnitt, der spürbar mehr

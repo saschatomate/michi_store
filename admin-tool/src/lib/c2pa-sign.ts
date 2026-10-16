@@ -20,8 +20,8 @@ export async function signGeneratedImage(imageBuffer: Buffer, prompt: string): P
       output: outputPath,
       metadata: {
         softwareAgent: "Marinell Admin-Tool Bildgenerierung",
-        generator: "OpenAI GPT Image API (gpt-image-1.5)",
-        model: "gpt-image-1.5",
+        generator: "OpenAI GPT Image API (gpt-image-2)",
+        model: "gpt-image-2",
         producer: "Marinell",
         prompt,
         digitalSourceType: resolveDigitalSourceType("ai-edited"),
