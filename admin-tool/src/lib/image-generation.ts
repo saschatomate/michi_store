@@ -399,6 +399,11 @@ export async function generateProductImageVariant(
     prompt,
     model: OPENAI_IMAGE_MODEL,
     size: mapping.size,
+    // Offizieller API-Parameter (nur "low" | "auto"): gpt-image-2 hat die Moderation gegenüber 1.5
+    // verschärft und lehnt Schmuck-Nahaufnahmen an Hals/Schulter/Hand fälschlich mit
+    // safety_violations=[sexual] ab. Per Spread gesetzt, weil die SDK-Typen ihn für edit() noch nicht
+    // listen, die API ihn aber akzeptiert (getestet).
+    ...{ moderation: "low" },
     quality: "high",
     output_format: "png",
     n: 1,
