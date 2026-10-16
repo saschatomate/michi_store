@@ -1064,7 +1064,6 @@ async function generateChainViaMask(
     model: OPENAI_IMAGE_MODEL,
     size: "1024x1536",
     quality: "high",
-    input_fidelity: "high",
     output_format: "png",
     n: 1,
   });

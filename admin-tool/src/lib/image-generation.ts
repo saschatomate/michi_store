@@ -400,7 +400,6 @@ export async function generateProductImageVariant(
     model: OPENAI_IMAGE_MODEL,
     size: mapping.size,
     quality: "high",
-    input_fidelity: "high",
     output_format: "png",
     n: 1,
   });
