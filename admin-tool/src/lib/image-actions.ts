@@ -7,6 +7,14 @@ import { sourceProducts, productGeneratedImages } from "@/db/schema";
 import { requireAuth } from "@/lib/dal";
 import { generateProductImageVariant } from "@/lib/image-generation";
 import { compositeJewelryVariant } from "@/lib/image-compositing";
+import { generateProductShotVariant } from "@/lib/product-shot";
+import {
+  PRODUCT_SHOT_BACKGROUNDS,
+  PRODUCT_SHOT_COMPOSITIONS,
+  backgroundFromLabel,
+  productShotLabel,
+  type ProductShotBackground,
+} from "@/lib/product-shot-facts";
 import { signGeneratedImage } from "@/lib/c2pa-sign";
 import { uploadGeneratedImage, deleteGeneratedImage } from "@/lib/image-storage";
 import {
@@ -58,12 +66,15 @@ async function resolveAndPersistModel(product: SourceProductRow): Promise<Marine
   return MARINELL_MODELS[key];
 }
 
+// shot gesetzt = Produktbild-Weg (Schmuckstück liegend auf einem Hintergrund, ohne Model): model und
+// poseVariant werden dann ignoriert und dürfen null sein.
 async function generateAndSaveVariant(
   product: SourceProductRow,
-  model: MarinellModel,
-  poseVariant: PoseVariant,
+  model: MarinellModel | null,
+  poseVariant: PoseVariant | null,
   variantIndex: number,
   method: GenerationMethod,
+  shot: ProductShotBackground | null = null,
 ): Promise<void> {
   const existing = await db.query.productGeneratedImages.findFirst({
     where: and(
@@ -76,13 +87,16 @@ async function generateAndSaveVariant(
   if (existing?.status === "approved") return;
 
   const methodLabel = method === "compositing" ? " (Compositing)" : "";
-  const label = `${model.name} – ${poseVariant.label}${methodLabel}`;
+  const label = shot
+    ? productShotLabel(shot, variantIndex)
+    : `${model!.name} – ${poseVariant!.label}${methodLabel}`;
 
   try {
-    const { buffer, prompt, chainMissing } =
-      method === "compositing"
-        ? await compositeJewelryVariant(product, model, poseVariant, variantIndex)
-        : await generateProductImageVariant(product, model, poseVariant, variantIndex);
+    const { buffer, prompt, chainMissing } = shot
+      ? await generateProductShotVariant(product, shot, variantIndex)
+      : method === "compositing"
+        ? await compositeJewelryVariant(product, model!, poseVariant!, variantIndex)
+        : await generateProductImageVariant(product, model!, poseVariant!, variantIndex);
     const signed = await signGeneratedImage(buffer, prompt);
     const path = `generated/${product.id}/${variantIndex}-${Date.now()}.png`;
     const { url } = await uploadGeneratedImage(signed, path);
@@ -175,6 +189,26 @@ export async function generateProductImages(
   revalidatePath("/", "layout");
 }
 
+// Produktbild-Weg: kein Model, kein assignedModelKey-Update. Befüllt dieselben 3 Slots wie der
+// Model-Weg (freigegebene Varianten bleiben unangetastet), mit 3 Bildausschnitten desselben
+// Hintergrunds.
+export async function generateProductShots(id: number, backgroundKey: string): Promise<void> {
+  await requireAuth();
+  const background = PRODUCT_SHOT_BACKGROUNDS.find((b) => b.key === backgroundKey);
+  if (!background) throw new Error("Unbekannter Hintergrund.");
+  const product = await db.query.sourceProducts.findFirst({ where: eq(sourceProducts.id, id) });
+  if (!product) throw new Error("Artikel nicht gefunden.");
+
+  await Promise.all(
+    PRODUCT_SHOT_COMPOSITIONS.map((_, i) =>
+      generateAndSaveVariant(product, null, null, i, "classic", background),
+    ),
+  );
+
+  revalidatePath(`/products/${id}`);
+  revalidatePath("/", "layout");
+}
+
 // Speichert einen manuellen Prompt-Override (z.B. Korrektur für Innen-/Außenseite bei Armbändern)
 // und generiert direkt neu - ersetzt nur nicht-freigegebene Varianten, wie bei "Neu generieren".
 // Leerer String setzt den Override zurück auf den automatisch gebauten Standard-Prompt. Nutzt
@@ -263,6 +297,15 @@ export async function regenerateProductImageVariant(imageId: number): Promise<vo
     where: eq(sourceProducts.id, row.sourceProductId),
   });
   if (!product) throw new Error("Artikel nicht gefunden.");
+
+  // Produktbild-Slot: gleichen Hintergrund wiederverwenden, kein Model nötig.
+  const shotBackground = backgroundFromLabel(row.handPreset);
+  if (shotBackground) {
+    await generateAndSaveVariant(product, null, null, row.variantIndex, "classic", shotBackground);
+    revalidatePath(`/products/${row.sourceProductId}`);
+    revalidatePath("/", "layout");
+    return;
+  }
 
   const model = await resolveAndPersistModel(product);
   const poseVariant = POSE_VARIANTS[row.variantIndex] ?? POSE_VARIANTS[0];

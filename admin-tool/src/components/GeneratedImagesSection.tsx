@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import Image from "next/image";
-import { AlertCircle, AlertTriangle, CheckCircle2, ImageIcon, Pencil, RefreshCw, RotateCcw, Trash2, Users, X, XCircle, ZoomIn } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, Gem, ImageIcon, Pencil, RefreshCw, RotateCcw, Trash2, Users, X, XCircle, ZoomIn } from "lucide-react";
 import {
   generateProductImages,
+  generateProductShots,
   approveProductImage,
   rejectProductImage,
   deleteProductImageVariant,
@@ -17,6 +18,7 @@ import { Lightbox } from "@/components/Lightbox";
 import { formatUsd } from "@/lib/format";
 import type { GeneratedImageStatus } from "@/db/schema";
 import type { ModelGender, ModelKey } from "@/lib/image-facts";
+import { PRODUCT_SHOT_BACKGROUNDS } from "@/lib/product-shot-facts";
 
 export type GeneratedImageItem = {
   id: number;
@@ -48,6 +50,118 @@ const statusLabel: Record<GeneratedImageStatus, string> = {
   approved: "Freigegeben",
   rejected: "Abgelehnt",
 };
+
+// Schritt 1 vor allem anderen: Produktbild (Schmuckstück auf Hintergrund) oder Bild mit Model.
+function ModePickerModal({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (mode: "product" | "model") => void;
+  onClose: () => void;
+}) {
+  const options = [
+    {
+      mode: "product" as const,
+      icon: Gem,
+      title: "Produktbild",
+      text: "Hochauflösendes Stillleben: das Schmuckstück liegt auf einem Hintergrund Ihrer Wahl (z.B. Lavagestein, Satin, Moos). Basis ist das höchstauflösende vorhandene Produktfoto.",
+    },
+    {
+      mode: "model" as const,
+      icon: Users,
+      title: "Produktbild mit Model",
+      text: "Das Schmuckstück wird von einem der MARINELL-Models getragen.",
+    },
+  ];
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/60 p-6" onClick={onClose}>
+      <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="font-display text-lg font-semibold text-zinc-900">Was soll generiert werden?</h3>
+          <button
+            onClick={onClose}
+            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+            aria-label="Schließen"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {options.map(({ mode, icon: Icon, title, text }) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => onSelect(mode)}
+              className="rounded-lg border border-zinc-200 p-4 text-left transition-colors hover:border-indigo-400 hover:bg-indigo-50/40"
+            >
+              <Icon size={20} className="mb-2 text-indigo-600" />
+              <span className="mb-1 block text-sm font-semibold text-zinc-900">{title}</span>
+              <span className="block text-xs leading-snug text-zinc-500">{text}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BackgroundPickerModal({
+  onConfirm,
+  onBack,
+  onClose,
+}: {
+  onConfirm: (backgroundKey: string) => void;
+  onBack: () => void;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState(PRODUCT_SHOT_BACKGROUNDS[0].key);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/60 p-6" onClick={onClose}>
+      <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="font-display text-lg font-semibold text-zinc-900">Hintergrund auswählen</h3>
+          <button
+            onClick={onClose}
+            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+            aria-label="Schließen"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-zinc-500">
+          Es entstehen 3 Bildausschnitte (von oben, schräg, Nahaufnahme) auf diesem Hintergrund.
+          Freigegebene Bilder bleiben unangetastet.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {PRODUCT_SHOT_BACKGROUNDS.map((bg) => (
+            <button
+              key={bg.key}
+              type="button"
+              onClick={() => setSelected(bg.key)}
+              className={`rounded-lg border p-3 text-left transition-colors ${
+                selected === bg.key
+                  ? "border-indigo-500 bg-indigo-50/60 ring-1 ring-indigo-200"
+                  : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50"
+              }`}
+            >
+              <span className="block text-sm font-semibold text-zinc-900">{bg.label}</span>
+              <span className="block text-xs leading-snug text-zinc-500">{bg.tagline}</span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-5 flex items-center justify-end gap-2 border-t border-zinc-100 pt-4">
+          <button onClick={onBack} className={buttonSecondary}>
+            Zurück
+          </button>
+          <button onClick={() => onConfirm(selected)} className={buttonPrimary}>
+            <RefreshCw size={14} />
+            Bilder generieren
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ModelPickerModal({
   models,
@@ -372,7 +486,7 @@ export function GeneratedImagesSection({
   const [isPending, startTransition] = useTransition();
   const [isEditingPrompt, setIsEditingPrompt] = useState(false);
   const [draftPrompt, setDraftPrompt] = useState(promptOverride ?? defaultPrompt);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerStep, setPickerStep] = useState<null | "mode" | "model" | "background">(null);
   const hasImages = images.length > 0;
   const hasCustomPrompt = Boolean(promptOverride);
   const currentModel = models.find((m) => m.key === currentModelKey);
@@ -399,8 +513,13 @@ export function GeneratedImagesSection({
   }
 
   function confirmModelAndGenerate(modelKey: ModelKey, method: GenerationMethod) {
-    setPickerOpen(false);
+    setPickerStep(null);
     startTransition(() => generateProductImages(id, modelKey, method));
+  }
+
+  function confirmBackgroundAndGenerate(backgroundKey: string) {
+    setPickerStep(null);
+    startTransition(() => generateProductShots(id, backgroundKey));
   }
 
   return (
@@ -431,7 +550,7 @@ export function GeneratedImagesSection({
               Prompt bearbeiten
             </button>
             <button
-              onClick={() => setPickerOpen(true)}
+              onClick={() => setPickerStep("mode")}
               disabled={isPending}
               className={hasImages ? buttonGhost : buttonPrimary}
             >
@@ -489,13 +608,26 @@ export function GeneratedImagesSection({
         <p className="text-sm text-zinc-400">Noch keine Bilder generiert.</p>
       )}
 
-      {pickerOpen && (
+      {pickerStep === "mode" && (
+        <ModePickerModal
+          onClose={() => setPickerStep(null)}
+          onSelect={(mode) => setPickerStep(mode === "product" ? "background" : "model")}
+        />
+      )}
+      {pickerStep === "background" && (
+        <BackgroundPickerModal
+          onClose={() => setPickerStep(null)}
+          onBack={() => setPickerStep("mode")}
+          onConfirm={confirmBackgroundAndGenerate}
+        />
+      )}
+      {pickerStep === "model" && (
         <ModelPickerModal
           models={models}
           recommendedModelKey={recommendedModelKey}
           currentModelKey={currentModelKey}
           compositingSupportedModelKeys={compositingSupportedModelKeys}
-          onClose={() => setPickerOpen(false)}
+          onClose={() => setPickerStep(null)}
           onConfirm={confirmModelAndGenerate}
         />
       )}
