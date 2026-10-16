@@ -59,8 +59,24 @@ Regeln:
   Tragegefühl, die Ruhe des Designs - nie Status, Reichtum oder Auffälligkeit. Die Langbeschreibung
   beginnt bevorzugt mit einem emotionalen/atmosphärischen Satz, bevor die Fakten folgen - nicht
   umgekehrt.
-- Der Produktname ist ein zurückhaltender Markenname im Stil eines Jewellery House, kein technischer
-  Modellcode und ohne Eigennamen von Personen.
+- Der Produktname ist ein zurückhaltender, aber origineller Markenname im Stil eines Jewellery House,
+  kein technischer Modellcode und ohne Eigennamen von Personen. Leite ihn aus einem konkreten
+  Merkmal der Produktdaten ab (Schliffform, Steinfarbe, Kategorie, Proportionen, Anzahl der Steine,
+  Materialfarbe) und übersetze es in ein poetisches Bild oder einen Begriff aus Natur, Licht, Zeit
+  oder Handwerk - z.B. ein einzelner Stein als "Solitaire" in Gestalt eines Tautropfens, ein
+  schmales Band als feiner Horizont, ein Tropfenschliff als Morgenlicht. Bevorzuge kurze, klangvolle,
+  leicht ungewöhnliche Namen (1-3 Wörter, gern lateinisch/italienisch/französisch anklingend), aber
+  vermeide Klischees wie "Eternity", "Royal" oder "Luxe" und bereits gebräuchliche Gattungsnamen.
+- Kreativität ist ausdrücklich gewünscht: Finde für jedes Stück ein eigenes, edles und
+  unerwartetes Leitbild, das sich aus den Produktdaten ergibt (z.B. der Charakter des Schliffs, die
+  Zahl und Anordnung der Steine, die Farbe des Metalls, die Zierlichkeit oder Präsenz der Maße), und
+  trage es durch Kurz- und Langbeschreibung als roten Faden. Nutze sinnliche, präzise Bilder
+  (Licht, Material, Berührung, Moment des Tragens) statt austauschbarer Schmuck-Floskeln wie
+  "funkelt", "krönt", "Eleganz pur" oder "für jeden Anlass". Jede Beschreibung soll sich spürbar von
+  einer anderen unterscheiden - variiere Satzbau, Einstieg und Bildwelt, statt eine Vorlage zu
+  wiederholen. Grenze: Bilder und Stimmung sind frei, aber sie dürfen keine zusätzlichen
+  Fakten behaupten (keine erfundene Herkunft, Handarbeit, Geschichte der Steine, Designer, Anzahl
+  oder Qualität, die nicht in den Daten steht).
 - Ton: leise, diskret, warm - niemals reißerisch, niemals lautstarke Superlative ("atemberaubend",
   "spektakulär"). Zurückhaltung ist bei MARINELL selbst ein Qualitätsmerkmal.
 - Ist "steinHerkunft" angegeben, gilt sie absolut: Ein Labordiamant wird nie als natürlich oder
@@ -143,10 +159,10 @@ export async function generateProductContent(product: SourceProductRow): Promise
 
   const response = await client.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 2048,
+    max_tokens: 4096,
     thinking: { type: "adaptive" },
     output_config: {
-      effort: "medium",
+      effort: "high",
       format: { type: "json_schema", schema: OUTPUT_SCHEMA },
     },
     system: SYSTEM_PROMPT,
