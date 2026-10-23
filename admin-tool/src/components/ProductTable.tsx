@@ -40,7 +40,7 @@ function formatPrice(value: number | null, currency: string | null) {
   return currencyFormatter.format(value);
 }
 
-const thClass = "px-3 py-2.5 font-medium";
+const thClass = "px-3 py-4 font-medium";
 const MAX_BATCH_SIZE = 20;
 
 export function ProductTable({ products }: { products: ProductListItem[] }) {
@@ -82,7 +82,7 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm">
       {feedback && selected.size === 0 && (
         <div className="flex items-center justify-between border-b border-emerald-100 bg-emerald-50 px-4 py-2.5">
           <span className="flex items-center gap-2 text-sm text-emerald-800">
@@ -120,7 +120,7 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
+            <tr className="border-b border-zinc-200 bg-white text-left text-sm text-zinc-500">
               <th className="w-10 px-4 py-2.5">
                 <input
                   type="checkbox"
@@ -153,7 +153,7 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
             {products.map((p) => (
               <tr
                 key={p.id}
-                className={`border-b border-zinc-100 last:border-0 hover:bg-zinc-50 ${
+                className={`border-b border-zinc-100 last:border-0 hover:bg-zinc-50/80 ${
                   p.shopifyLastEvent?.action === "shopify_error"
                     ? "bg-red-50/60 shadow-[inset_4px_0_0_0_#dc2626]"
                     : isRecent(p.shopifyLastEvent?.at) || p.shopifyOutOfSync
@@ -171,32 +171,32 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
                     className="h-3.5 w-3.5 rounded border-zinc-300 accent-indigo-600"
                   />
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-3">
                   {p.thumbnailUrl ? (
                     <button
                       type="button"
                       onClick={() => setLightboxSrc(p.thumbnailUrl)}
-                      className="block overflow-hidden rounded-lg transition-transform hover:scale-105"
+                      className="block overflow-hidden rounded-full transition-transform hover:scale-105"
                     >
                       <Image
                         src={p.thumbnailUrl}
                         alt=""
                         width={56}
                         height={56}
-                        className="h-14 w-14 rounded-lg border border-zinc-200 object-cover"
+                        className="h-12 w-12 rounded-full border border-zinc-200 object-cover"
                       />
                     </button>
                   ) : (
                     <div
                       title="Kein Bild von Diamond Group verfügbar"
-                      className="flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 text-zinc-400"
+                      className="flex h-12 w-12 flex-col items-center justify-center gap-0.5 rounded-full border border-dashed border-zinc-300 bg-zinc-50 text-zinc-400"
                     >
                       <ImageOff size={16} strokeWidth={1.5} />
                       <span className="text-[8px] font-medium uppercase tracking-wide">Kein Bild</span>
                     </div>
                   )}
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-3">
                   <div className="flex items-center gap-1.5">
                     <Link
                       href={`/products/${p.id}`}
@@ -271,7 +271,7 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
                   {formatPrice(p.uvp, p.uvpWaehrung)}
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums text-zinc-600">{p.bestand ?? "–"}</td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-3">
                   <StatusBadge status={p.status} />
                 </td>
               </tr>

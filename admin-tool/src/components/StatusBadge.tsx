@@ -14,19 +14,20 @@ const STATUS_LABELS: Record<ProductStatus, string> = {
 };
 
 const STATUS_STYLES: Record<ProductStatus, string> = {
-  unvollstaendig: "bg-orange-50 text-orange-700",
-  neu: "bg-zinc-100 text-zinc-600",
-  ausgewaehlt: "bg-blue-50 text-blue-700",
-  in_pipeline: "bg-amber-50 text-amber-700",
-  review: "bg-violet-50 text-violet-700",
-  freigegeben: "bg-sky-50 text-sky-700",
-  uebertragungsfehler: "bg-red-50 text-red-700",
-  veroeffentlicht: "bg-emerald-50 text-emerald-700",
-  abgelehnt: "bg-red-50 text-red-700",
+  unvollstaendig: "bg-orange-100 text-orange-600",
+  neu: "bg-sky-100 text-sky-600",
+  ausgewaehlt: "bg-blue-100 text-blue-600",
+  in_pipeline: "bg-amber-100 text-amber-600",
+  review: "bg-violet-100 text-violet-600",
+  freigegeben: "bg-cyan-100 text-cyan-700",
+  uebertragungsfehler: "bg-red-100 text-red-600",
+  veroeffentlicht: "bg-emerald-100 text-emerald-600",
+  abgelehnt: "bg-red-100 text-red-600",
   archiviert: "bg-zinc-100 text-zinc-500",
 };
 
-const STATUS_DOT: Record<ProductStatus, string> = {
+// Punkt-Farben werden nicht mehr angezeigt (Pastell-Pill-Design), bleiben für mögliche Wiederverwendung erhalten.
+export const STATUS_DOT: Record<ProductStatus, string> = {
   unvollstaendig: "bg-orange-500",
   neu: "bg-zinc-400",
   ausgewaehlt: "bg-blue-500",
@@ -42,9 +43,8 @@ const STATUS_DOT: Record<ProductStatus, string> = {
 export function StatusBadge({ status }: { status: ProductStatus }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[status]}`}
+      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLES[status]}`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[status]}`} />
       {STATUS_LABELS[status]}
     </span>
   );

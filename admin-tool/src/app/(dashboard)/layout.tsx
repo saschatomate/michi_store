@@ -13,9 +13,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ]);
 
   return (
-    <div className="flex h-full min-h-screen bg-zinc-50">
-      <Sidebar filterOptions={filterOptions} budget={budget} shopifyActivity={shopifyActivity} />
-      <main className="min-w-0 flex-1 px-8 py-8">{children}</main>
+    <div className="h-screen p-3 sm:p-5">
+      <div className="flex h-full overflow-hidden rounded-[2rem] bg-white shadow-2xl shadow-black/10">
+        <Sidebar filterOptions={filterOptions} budget={budget} shopifyActivity={shopifyActivity} />
+        <main className="min-w-0 flex-1 overflow-y-auto bg-zinc-50/70 px-8 py-8">{children}</main>
+      </div>
     </div>
   );
 }
