@@ -9,10 +9,12 @@
     "lint": "eslint",
     "db:generate": "node --env-file=.env.local node_modules/.bin/drizzle-kit generate",
     "db:migrate": "tsx --env-file=.env.local src/db/migrate.ts",
-    "import": "tsx --env-file=.env.local src/scripts/import-cli.ts"
+    "import": "tsx --env-file=.env.local src/scripts/import-cli.ts",
+    "mcp": "tsx --env-file=.env.local src/mcp/server.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@supabase/storage-js": "^2.109.0",
     "basic-ftp": "^6.0.1",
     "csv-parse": "^7.0.1",
@@ -27,7 +29,8 @@
     "react-dom": "19.2.4",
     "server-only": "^0.0.1",
     "sharp": "^0.35.3",
-    "sign-ai-media": "^0.1.2"
+    "sign-ai-media": "^0.1.2",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
