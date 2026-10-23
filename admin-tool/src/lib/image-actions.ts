@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
@@ -16,7 +17,13 @@ import {
   type ProductShotBackground,
 } from "@/lib/product-shot-facts";
 import { signGeneratedImage } from "@/lib/c2pa-sign";
-import { uploadGeneratedImage, deleteGeneratedImage } from "@/lib/image-storage";
+import {
+  uploadGeneratedImage,
+  deleteGeneratedImage,
+  createSignedImageUpload,
+  publicImageUrl,
+} from "@/lib/image-storage";
+import { MAX_IMAGE_SLOTS } from "@/lib/image-slots";
 import {
   assignModel,
   modelKeyByName,
@@ -117,6 +124,7 @@ async function generateAndSaveVariant(
           generatedAt: new Date(),
           generationError: null,
           chainMissing,
+          isUpload: false,
         })
         .where(eq(productGeneratedImages.id, existing.id));
     } else {
@@ -292,6 +300,7 @@ export async function regenerateProductImageVariant(imageId: number): Promise<vo
     where: eq(productGeneratedImages.id, imageId),
   });
   if (!row) throw new Error("Bild nicht gefunden.");
+  if (row.isUpload) throw new Error("Eigene Bilder können nicht neu generiert werden.");
 
   const product = await db.query.sourceProducts.findFirst({
     where: eq(sourceProducts.id, row.sourceProductId),
@@ -317,4 +326,63 @@ export async function regenerateProductImageVariant(imageId: number): Promise<vo
 
   revalidatePath(`/products/${row.sourceProductId}`);
   revalidatePath("/", "layout");
+}
+
+// --- Eigene Bilder in den 6 Bild-Slots ---------------------------------------------------------
+
+const UPLOAD_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+
+function assertSlot(slot: number) {
+  if (!Number.isInteger(slot) || slot < 0 || slot >= MAX_IMAGE_SLOTS) {
+    throw new Error(`Ungültiger Bild-Slot (0-${MAX_IMAGE_SLOTS - 1}).`);
+  }
+}
+
+// Der Browser lädt die Datei direkt nach Supabase hoch (kein Server-Action-Größenlimit).
+export async function createSlotUploadUrl(
+  productId: number,
+  slot: number,
+  contentType: string,
+): Promise<{ signedUrl: string; path: string }> {
+  await requireAuth();
+  assertSlot(slot);
+  const ext = UPLOAD_TYPES[contentType];
+  if (!ext) throw new Error(`Dateityp "${contentType}" wird nicht unterstützt (JPG, PNG oder WebP).`);
+  return createSignedImageUpload(`generated/${productId}/upload-${slot}-${randomUUID()}.${ext}`);
+}
+
+// Übernimmt das hochgeladene Bild in den Slot. Ein vorhandenes Bild im Slot (KI oder eigenes)
+// wird ersetzt. Eigene Bilder gelten direkt als freigegeben.
+export async function registerSlotUpload(productId: number, slot: number, path: string): Promise<void> {
+  await requireAuth();
+  assertSlot(slot);
+  if (!path.startsWith(`generated/${productId}/upload-${slot}-`) || path.includes("..")) {
+    throw new Error("Ungültiger Bildpfad.");
+  }
+  const url = publicImageUrl(path);
+  const res = await fetch(url, { method: "HEAD" });
+  if (!res.ok) throw new Error(`Bild wurde nicht korrekt hochgeladen (${res.status}).`);
+
+  const existing = await db.query.productGeneratedImages.findFirst({
+    where: and(eq(productGeneratedImages.sourceProductId, productId), eq(productGeneratedImages.variantIndex, slot)),
+  });
+  const values = {
+    handPreset: "Eigenes Bild",
+    imageUrl: url,
+    storagePath: path,
+    status: "approved" as const,
+    approvedAt: new Date(),
+    generatedAt: new Date(),
+    generationError: null,
+    chainMissing: false,
+    isUpload: true,
+  };
+  if (existing) {
+    if (existing.storagePath) await deleteGeneratedImage(existing.storagePath).catch(() => {});
+    await db.update(productGeneratedImages).set(values).where(eq(productGeneratedImages.id, existing.id));
+  } else {
+    await db.insert(productGeneratedImages).values({ sourceProductId: productId, variantIndex: slot, ...values });
+  }
+
+  revalidatePath(`/products/${productId}`);
 }

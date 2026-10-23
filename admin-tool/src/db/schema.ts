@@ -232,6 +232,9 @@ export const productGeneratedImages = pgTable(
     // Fall über den Prompt-Text zu erraten. Für den klassischen Weg (generateProductImageVariant())
     // immer false - dort gibt es keinen separaten Kettenschritt, der fehlschlagen könnte.
     chainMissing: boolean("chain_missing").notNull().default(false),
+    // true = selbst hochgeladenes Bild (kein KI-Ergebnis): wird sofort freigegeben, nie von der
+    // Generierung überschrieben und hat kein "Neu generieren".
+    isUpload: boolean("is_upload").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("product_generated_images_product_idx").on(table.sourceProductId)],

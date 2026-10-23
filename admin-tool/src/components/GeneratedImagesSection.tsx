@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { AlertCircle, AlertTriangle, CheckCircle2, Gem, ImageIcon, Pencil, RefreshCw, RotateCcw, Trash2, Users, X, XCircle, ZoomIn } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, Gem, ImageIcon, ImagePlus, Pencil, RefreshCw, RotateCcw, Trash2, Users, X, XCircle, ZoomIn } from "lucide-react";
 import {
   generateProductImages,
   generateProductShots,
@@ -11,6 +12,8 @@ import {
   deleteProductImageVariant,
   regenerateProductImageVariant,
   updateImagePromptOverride,
+  createSlotUploadUrl,
+  registerSlotUpload,
   type GenerationMethod,
 } from "@/lib/image-actions";
 import { buttonPrimary, buttonSecondary, buttonGhost, cardClass, inputClass } from "@/lib/ui";
@@ -18,6 +21,7 @@ import { Lightbox } from "@/components/Lightbox";
 import { formatUsd } from "@/lib/format";
 import type { GeneratedImageStatus } from "@/db/schema";
 import type { ModelGender, ModelKey } from "@/lib/image-facts";
+import { MAX_IMAGE_SLOTS } from "@/lib/image-slots";
 import { PRODUCT_SHOT_BACKGROUNDS } from "@/lib/product-shot-facts";
 
 export type GeneratedImageItem = {
@@ -31,6 +35,7 @@ export type GeneratedImageItem = {
   // in db/schema.ts) - das Bild selbst gilt sonst als normaler Erfolg (kein generationError), daher
   // die eigene Badge unten statt den Fall unbemerkt durchrutschen zu lassen.
   chainMissing: boolean;
+  isUpload: boolean;
   // Kosten des zuletzt für diesen Slot abgeschickten API-Aufrufs (siehe cost-tracking.ts) - null
   // solange für diese Variante noch nichts geloggt wurde (z.B. alte Bilder vor Einführung des
   // Kosten-Trackings).
@@ -349,7 +354,75 @@ function ModelPickerModal({
   );
 }
 
-function ImageCard({ item }: { item: GeneratedImageItem }) {
+const UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+// Lädt eine Datei direkt in Supabase hoch und übernimmt sie in den Slot.
+async function uploadToSlot(productId: number, slot: number, file: File) {
+  if (!UPLOAD_TYPES.includes(file.type)) throw new Error(`"${file.name}": nur JPG, PNG oder WebP.`);
+  const target = await createSlotUploadUrl(productId, slot, file.type);
+  const body = new FormData();
+  body.append("cacheControl", "3600");
+  body.append("", file);
+  const res = await fetch(target.signedUrl, { method: "PUT", body, headers: { "x-upsert": "false" } });
+  if (!res.ok) throw new Error(`Upload von "${file.name}" fehlgeschlagen (${res.status}).`);
+  await registerSlotUpload(productId, slot, target.path);
+}
+
+function UploadButton({
+  productId,
+  slot,
+  label,
+  onError,
+  className,
+}: {
+  productId: number;
+  slot: number;
+  label: string;
+  onError: (message: string | null) => void;
+  className: string;
+}) {
+  const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isPending, startTransition] = useTransition();
+  return (
+    <>
+      <button type="button" disabled={isPending} onClick={() => inputRef.current?.click()} className={className}>
+        <ImagePlus size={12} className={isPending ? "animate-pulse" : ""} />
+        {isPending ? "Lädt hoch…" : label}
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={UPLOAD_TYPES.join(",")}
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (!file) return;
+          onError(null);
+          startTransition(async () => {
+            try {
+              await uploadToSlot(productId, slot, file);
+              router.refresh();
+            } catch (err) {
+              onError(err instanceof Error ? err.message : String(err));
+            }
+          });
+        }}
+      />
+    </>
+  );
+}
+
+function ImageCard({
+  item,
+  productId,
+  onError,
+}: {
+  item: GeneratedImageItem;
+  productId: number;
+  onError: (message: string | null) => void;
+}) {
   const [isPending, startTransition] = useTransition();
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
@@ -434,14 +507,33 @@ function ImageCard({ item }: { item: GeneratedImageItem }) {
           </div>
         )}
         <div className="flex gap-1.5">
-          <button
-            onClick={() => startTransition(() => regenerateProductImageVariant(item.id))}
-            disabled={isPending}
-            className={`${buttonGhost} flex-1 px-2 py-1 text-xs`}
-          >
-            <RefreshCw size={12} className={isPending ? "animate-spin" : ""} />
-            Neu
-          </button>
+          {item.isUpload ? (
+            <UploadButton
+              productId={productId}
+              slot={item.variantIndex}
+              label="Ersetzen"
+              onError={onError}
+              className={`${buttonGhost} flex-1 px-2 py-1 text-xs`}
+            />
+          ) : (
+            <>
+              <button
+                onClick={() => startTransition(() => regenerateProductImageVariant(item.id))}
+                disabled={isPending}
+                className={`${buttonGhost} flex-1 px-2 py-1 text-xs`}
+              >
+                <RefreshCw size={12} className={isPending ? "animate-spin" : ""} />
+                Neu
+              </button>
+              <UploadButton
+                productId={productId}
+                slot={item.variantIndex}
+                label="Eigenes"
+                onError={onError}
+                className={`${buttonGhost} flex-1 px-2 py-1 text-xs`}
+              />
+            </>
+          )}
           <button
             onClick={() => {
               if (confirm("Dieses Bild wirklich löschen?")) {
@@ -487,7 +579,8 @@ export function GeneratedImagesSection({
   const [isEditingPrompt, setIsEditingPrompt] = useState(false);
   const [draftPrompt, setDraftPrompt] = useState(promptOverride ?? defaultPrompt);
   const [pickerStep, setPickerStep] = useState<null | "mode" | "model" | "background">(null);
-  const hasImages = images.length > 0;
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const hasImages = images.some((img) => !img.isUpload);
   const hasCustomPrompt = Boolean(promptOverride);
   const currentModel = models.find((m) => m.key === currentModelKey);
   const totalCostUsd = images.reduce((sum, img) => sum + (img.costUsd ?? 0), 0);
@@ -595,17 +688,40 @@ export function GeneratedImagesSection({
             )}
           </div>
         </div>
-      ) : hasImages ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {images
-            .slice()
-            .sort((a, b) => a.variantIndex - b.variantIndex)
-            .map((item) => (
-              <ImageCard key={item.id} item={item} />
-            ))}
-        </div>
       ) : (
-        <p className="text-sm text-zinc-400">Noch keine Bilder generiert.</p>
+        <>
+          {uploadError && (
+            <div className="mb-3 flex items-start gap-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span>{uploadError}</span>
+            </div>
+          )}
+          <p className="mb-3 text-xs text-zinc-500">
+            Bis zu {MAX_IMAGE_SLOTS} Bilder pro Produkt: KI-generierte oder selbst hochgeladene (JPG, PNG, WebP).
+            Eigene Bilder gelten sofort als freigegeben.
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {Array.from({ length: MAX_IMAGE_SLOTS }, (_, slot) => {
+              const item = images.find((img) => img.variantIndex === slot);
+              if (item) return <ImageCard key={item.id} item={item} productId={id} onError={setUploadError} />;
+              return (
+                <div
+                  key={`empty-${slot}`}
+                  className="flex aspect-square flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-3 text-center"
+                >
+                  <span className="text-xs text-zinc-400">Slot {slot + 1} frei</span>
+                  <UploadButton
+                    productId={id}
+                    slot={slot}
+                    label="Eigenes Bild hochladen"
+                    onError={setUploadError}
+                    className={`${buttonSecondary} px-2 py-1 text-xs`}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {pickerStep === "mode" && (

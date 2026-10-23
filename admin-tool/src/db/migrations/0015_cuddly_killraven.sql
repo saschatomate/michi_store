@@ -1,0 +1,1 @@
+ALTER TABLE "product_generated_images" ADD COLUMN "is_upload" boolean DEFAULT false NOT NULL;
