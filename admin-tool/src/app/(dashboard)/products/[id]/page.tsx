@@ -141,14 +141,6 @@ export default async function ProductDetailPage({
                 NEU ERSCHIENEN
               </span>
             )}
-            {product.missingFromStockAt && (
-              <span
-                title="In der letzten Lieferanten-Datei nicht mehr enthalten"
-                className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-500"
-              >
-                NICHT MEHR IM BESTAND
-              </span>
-            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -161,6 +153,34 @@ export default async function ProductDetailPage({
           <StatusSelect id={product.id} status={product.status} />
         </div>
       </div>
+
+      {product.missingFromStockAt && (
+        <div className="rounded-lg border-2 border-red-500 bg-red-50 px-4 py-3">
+          <div className="text-sm font-bold uppercase tracking-wide text-red-700">
+            ⚠ Achtung: nicht mehr bei Diamond Group verfügbar
+          </div>
+          <p className="mt-1 text-sm text-red-800">
+            Dieses Produkt steht seit {formatDateTime(product.missingFromStockAt)} nicht mehr in der Import-Datei. Es bleibt
+            in diesem Tool gespeichert, wird aber nicht mehr aus dem Import aktualisiert.
+          </p>
+        </div>
+      )}
+
+      {product.shopifyProductId && (
+        <div className="rounded-lg border-2 border-emerald-600 bg-emerald-50 px-4 py-3">
+          <div className="text-sm font-bold uppercase tracking-wide text-emerald-800">
+            ✓ Achtung: an Shopify übertragen
+            {product.shopifyStatus && (
+              <span className="ml-2 rounded bg-emerald-600 px-1.5 py-0.5 text-xs text-white">
+                {product.shopifyStatus === "active" ? "LIVE" : product.shopifyStatus === "archived" ? "ARCHIVIERT" : "ENTWURF"}
+              </span>
+            )}
+          </div>
+          {product.shopifySyncedAt && (
+            <p className="mt-1 text-sm text-emerald-900">Letzte Übertragung: {formatDateTime(product.shopifySyncedAt)}</p>
+          )}
+        </div>
+      )}
 
       {latestShopify && isRecent(latestShopify.createdAt) && (
         <div

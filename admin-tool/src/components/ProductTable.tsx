@@ -158,7 +158,9 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
                     ? "bg-red-50/60 shadow-[inset_4px_0_0_0_#dc2626]"
                     : isRecent(p.shopifyLastEvent?.at) || p.shopifyOutOfSync
                       ? "bg-orange-50/70 shadow-[inset_4px_0_0_0_#f97316]"
-                      : ""
+                      : p.isMissingFromStock
+                        ? "bg-red-50/40 shadow-[inset_4px_0_0_0_#ef4444]"
+                        : ""
                 }`}
               >
                 <td className="px-4 py-2">
@@ -222,10 +224,10 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
                     )}
                     {p.isMissingFromStock && (
                       <span
-                        title="In der letzten Lieferanten-Datei nicht mehr enthalten"
-                        className="inline-flex items-center rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500"
+                        title="Dieses Produkt steht nicht mehr in der Diamond-Group-Datei. Es bleibt hier gespeichert, wird aber nicht mehr aus dem Import aktualisiert."
+                        className="inline-flex items-center rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
                       >
-                        NICHT MEHR IM BESTAND
+                        ⚠ Nicht mehr bei Diamond Group
                       </span>
                     )}
                   </div>
@@ -236,7 +238,7 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
                           p.shopifyStatus === "active" ? "bg-emerald-600" : p.shopifyStatus === "archived" ? "bg-zinc-700" : "bg-sky-600"
                         }`}
                       >
-                        Shopify {p.shopifyStatus === "active" ? "live" : p.shopifyStatus === "archived" ? "archiviert" : "Entwurf"}
+                        ✓ An Shopify übertragen · {p.shopifyStatus === "active" ? "live" : p.shopifyStatus === "archived" ? "archiviert" : "Entwurf"}
                       </span>
                       {p.shopifyLastEvent?.action === "shopify_error" && (
                         <span className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
