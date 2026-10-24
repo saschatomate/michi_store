@@ -27,6 +27,7 @@ import {
 import { availabilityParagraph, deriveAvailability, type ProductAvailability } from "@/lib/availability";
 import { loadAvailabilityRules } from "@/lib/availability-rules";
 import { STONE_ORIGIN_LABELS } from "@/lib/custom-product";
+import { descriptionHtml, descriptionPlain, shopPrice, shopTitle } from "@/lib/shop-data";
 import { diffSnapshots, type ShopifyAction, type ShopifyChanges, type ShopifySnapshot } from "@/lib/shopify-changes";
 
 type SourceProduct = typeof sourceProducts.$inferSelect;
@@ -36,13 +37,6 @@ const NS = "marinell";
 
 export type ShopifyMode = "draft" | "active";
 
-function htmlFromPlainText(text: string): string {
-  return text
-    .trim()
-    .split(/\n{2,}/)
-    .map((para) => `<p>${para.trim().replace(/\n/g, "<br>")}</p>`)
-    .join("\n");
-}
 
 // Reihenfolge: Originalbilder (bei eigenen Produkten die selbst hochgeladenen), danach freigegebene
 // KI-Bilder. Ein eigenes "Hauptbild"-Flag für das Shop-Raster gibt es noch nicht.
@@ -83,6 +77,16 @@ async function categoryChain(productId: number) {
   return Array.from(chain.values());
 }
 
+// Intro-Text der Kategorie: der erste vorhandene in der Reihenfolge "zugewiesene Kategorie, dann ihre
+// Eltern" - die spezifischste Kategorie gewinnt.
+function introFromChain(chain: { introText: string | null }[]): string | null {
+  return chain.find((c) => c.introText?.trim())?.introText?.trim() ?? null;
+}
+
+export async function categoryIntroFor(productId: number): Promise<string | null> {
+  return introFromChain(await categoryChain(productId));
+}
+
 export type SyncOptions = {
   // "keep": den bisherigen Shopify-Status beibehalten (live bleibt live, Entwurf bleibt Entwurf) -
   // für automatische Nachführung. Archivierte Produkte kommen dabei als Entwurf zurück.
@@ -110,26 +114,28 @@ export function buildProductSetInput(args: {
   product: SourceProduct;
   availability: ProductAvailability;
   paragraph: string;
+  intro: string | null;
   imageUrls: string[];
   collectionIds: string[];
   categorySlugs: string[];
   options: { mode: ShopifyMode; isTest?: boolean };
   isCreate: boolean;
 }) {
-  const { product, availability, paragraph, imageUrls, collectionIds, categorySlugs, options, isCreate } = args;
+  const { product, availability, paragraph, intro, imageUrls, collectionIds, categorySlugs, options, isCreate } = args;
 
-  if (product.uvp === null || product.uvp === undefined) {
+  const sellingPrice = shopPrice(product);
+  if (sellingPrice === null) {
     throw new Error(`${product.modellErweitert} hat keinen Verkaufspreis.`);
   }
-  const baseTitle = product.genProductNameDe || product.kurzBezeichnungDe || product.modellErweitert;
+  const baseTitle = shopTitle(product);
   const title = options.isTest ? `[TEST] ${baseTitle}` : baseTitle;
-  const bodyText = product.genLongDescDe || product.langBezeichnungDe || "";
-  const descriptionHtml = [bodyText ? htmlFromPlainText(bodyText) : "", paragraph ? `<p><strong>${paragraph}</strong></p>` : ""]
+  // Beschreibung = Kategorie-Intro + Faktenliste (oder manuelle Überschreibung), dazu die Lieferzeit.
+  const bodyHtml = [descriptionHtml(product, intro), paragraph ? `<p><strong>${paragraph}</strong></p>` : ""]
     .filter(Boolean)
     .join("\n");
 
   const isRing = availability.variants.length > 0;
-  const price = product.uvp.toFixed(2);
+  const price = sellingPrice.toFixed(2);
 
   const variantMeta = (mode: string, label: string): Metafield[] => [
     ...metafield("production_mode", "single_line_text_field", mode),
@@ -185,7 +191,7 @@ export function buildProductSetInput(args: {
 
   return {
     title,
-    descriptionHtml: descriptionHtml || undefined,
+    descriptionHtml: bodyHtml || undefined,
     vendor: VENDOR,
     productType: product.kategorieEbene1 || product.hauptkategorie || undefined,
     tags,
@@ -212,19 +218,18 @@ async function logShopify(productId: number, action: ShopifyAction, actor: strin
 
 function snapshotOf(
   product: SourceProduct,
-  prep: { availability: ProductAvailability; imageUrls: string[]; chain: { slug: string }[] },
+  prep: { availability: ProductAvailability; imageUrls: string[]; chain: { slug: string }[]; intro: string | null },
   input: ReturnType<typeof buildProductSetInput>,
   shopStatus: string,
 ): ShopifySnapshot {
-  const bodyText = (product.genLongDescDe || product.langBezeichnungDe || "").trim();
   return {
     title: input.title,
-    price: product.uvp !== null ? product.uvp.toFixed(2) : "",
+    price: shopPrice(product) !== null ? shopPrice(product)!.toFixed(2) : "",
     leadTime: prep.availability.label,
     sizes: prep.availability.variants.map((v) => v.size),
     images: prep.imageUrls.length,
     tags: [...input.tags].sort(),
-    body: bodyText,
+    body: descriptionPlain(product, prep.intro),
     shopStatus,
   };
 }
@@ -235,7 +240,7 @@ async function prepare(product: SourceProduct) {
   const availability = deriveAvailability(product, rules);
   const imageUrls = await collectShopifyImageUrls(product);
   const chain = await categoryChain(product.id);
-  return { rules, availability, imageUrls, chain, paragraph: availabilityParagraph(availability, rules) };
+  return { rules, availability, imageUrls, chain, intro: introFromChain(chain), paragraph: availabilityParagraph(availability, rules) };
 }
 
 function signatureOf(
@@ -247,6 +252,7 @@ function signatureOf(
     product,
     availability: prep.availability,
     paragraph: prep.paragraph,
+    intro: prep.intro,
     imageUrls: [],
     collectionIds: [],
     categorySlugs: prep.chain.map((c) => c.slug),
@@ -260,7 +266,7 @@ function signatureOf(
 
 // True, wenn das Produkt schon in Shopify liegt und sich seitdem etwas geändert hat.
 export async function isShopifyOutOfSync(product: SourceProduct): Promise<boolean> {
-  if (!product.shopifyProductId || product.uvp === null) return false;
+  if (!product.shopifyProductId || shopPrice(product) === null) return false;
   if (product.shopifySyncSignature === null) return true;
   return signatureOf(product, await prepare(product)) !== product.shopifySyncSignature;
 }
@@ -320,6 +326,7 @@ export async function syncProductToShopify(productId: number, options: SyncOptio
       product,
       availability,
       paragraph: prep.paragraph,
+      intro: prep.intro,
       imageUrls,
       collectionIds,
       categorySlugs,
@@ -458,8 +465,7 @@ export async function resyncChangedProducts(limit = 25): Promise<ResyncSummary> 
 export async function shopReadinessProblems(product: SourceProduct): Promise<string[]> {
   const problems: string[] = [];
   if (product.discontinued) problems.push("Produkt ist als nicht mehr lieferbar markiert");
-  if (!product.contentApprovedAt) problems.push("Texte sind noch nicht freigegeben");
-  if (product.uvp === null || product.uvp === undefined) problems.push("Verkaufspreis fehlt");
+  if (shopPrice(product) === null) problems.push("Verkaufspreis fehlt");
   if ((await collectShopifyImageUrls(product)).length === 0) problems.push("Kein Bild vorhanden");
   if (product.hauptkategorie === "Ring") {
     const availability = deriveAvailability(product, await loadAvailabilityRules());

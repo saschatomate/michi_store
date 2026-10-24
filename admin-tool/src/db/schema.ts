@@ -185,6 +185,11 @@ export const sourceProducts = pgTable(
     // "fehlt in der Datei" bedeuten nur "nicht vorrätig", nicht "ausgelistet"). Ausgelistete Produkte
     // werden nicht mehr verkauft/übertragen (siehe availability.ts).
     discontinued: boolean("discontinued").notNull().default(false),
+    // Manuelle Überschreibungen der Shop-Daten (NULL = automatisch, siehe shop-data.ts): Titel, Verkaufspreis
+    // (sonst DG-UVP auf den Hunderter abgerundet) und komplette Beschreibung. Kommen nie aus der CSV.
+    titleOverride: text("title_override"),
+    priceOverride: doublePrecision("price_override"),
+    descriptionOverride: text("description_override"),
     designFamilyId: text("design_family_id"),
     ringSizes: jsonb("ring_sizes").$type<string[]>(),
     customImages: jsonb("custom_images").$type<CustomImage[]>(),
@@ -316,6 +321,9 @@ export const categories = pgTable(
     // Private Jewellery, Zwischenkategorien wie Amalfi) werden nie vorgeschlagen, nur von Hand
     // vergeben. Die endgültige Zuordnung trifft immer der Mensch im Editor.
     shopifyCollectionId: text("shopify_collection_id"),
+    // Einleitungstext, der bei jedem Produkt dieser Kategorie (bzw. ihrer Unterkategorien) am Anfang der
+    // Shop-Beschreibung steht; darunter folgt die Faktenliste des Produkts.
+    introText: text("intro_text"),
     ruleStoneOrigin: text("rule_stone_origin").$type<StoneOrigin>(),
     ruleProductType: text("rule_product_type"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

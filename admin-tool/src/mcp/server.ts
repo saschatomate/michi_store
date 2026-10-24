@@ -5,6 +5,7 @@ import { desc, eq, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { sourceProducts, productGeneratedImages, STATUS_VALUES } from "@/db/schema";
 import { buildWhere } from "@/lib/product-query";
+import { shopPrice } from "@/lib/shop-data";
 
 // Nur lesender MCP-Server (stdio) für das Admin-Tool: Produkte per natürlicher Sprache suchen.
 // Läuft lokal, nutzt DATABASE_URL aus .env.local und schreibt nie in die Datenbank.
@@ -26,6 +27,7 @@ function summarize(p: typeof sourceProducts.$inferSelect) {
     legierung: p.legierung,
     caratGesamt: p.caratur,
     preisUvp: p.uvp,
+    shopPreis: shopPrice(p),
     waehrung: p.uvpWaehrung,
     bestand: p.bestand,
     status: p.status,

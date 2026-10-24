@@ -17,13 +17,15 @@ async function logStatus(id: number, from: string, to: string) {
   await db.insert(productAuditLog).values({ sourceProductId: id, action: "status", changes: { status: { from, to } } });
 }
 
-// Review -> Freigegeben: erst wenn Texte freigegeben sind und alles für den Shop da ist.
+// Freigeben für den Shop: sobald Preis, Bild und Pflichtdaten da sind - ein KI-Text ist nicht mehr nötig,
+// die Beschreibung entsteht aus Kategorie-Intro und Produktdaten (shop-data.ts).
+const APPROVABLE_STATUSES = ["neu", "ausgewaehlt", "in_pipeline", "review"];
 export async function approveProductForShop(id: number): Promise<{ ok: true } | { ok: false; problems: string[] }> {
   await requireAuth();
   const product = await db.query.sourceProducts.findFirst({ where: eq(sourceProducts.id, id) });
   if (!product) throw new Error("Produkt nicht gefunden.");
-  if (product.status !== "review") {
-    return { ok: false, problems: ["Nur Produkte im Status „Review offen“ können freigegeben werden"] };
+  if (!APPROVABLE_STATUSES.includes(product.status)) {
+    return { ok: false, problems: ["Dieser Status lässt keine Freigabe für den Shop zu"] };
   }
   const problems = await shopReadinessProblems(product);
   if (problems.length > 0) return { ok: false, problems };

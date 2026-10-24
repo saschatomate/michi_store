@@ -25,7 +25,9 @@ import { loadAvailabilityRules } from "@/lib/availability-rules";
 import { DiscontinuedToggle } from "@/components/DiscontinuedToggle";
 import { ShopifyPublishSection } from "@/components/ShopifyPublishSection";
 import { shopifyAdminProductUrl } from "@/lib/shopify-client";
-import { isShopifyOutOfSync } from "@/lib/shopify-sync";
+import { categoryIntroFor, isShopifyOutOfSync } from "@/lib/shopify-sync";
+import { ShopDataSection } from "@/components/ShopDataSection";
+import { autoDescriptionPlain, autoShopPrice, autoShopTitle, shopPrice } from "@/lib/shop-data";
 import { listShopifyEventsFor } from "@/lib/shopify-activity";
 import { isRecent } from "@/lib/shopify-changes";
 import { ShopifyChangeDetails, ShopifyEventHeader } from "@/components/ShopifyChangeList";
@@ -88,6 +90,7 @@ export default async function ProductDetailPage({
   ]);
   const [shopifyOutOfSync, shopifyEvents] = await Promise.all([isShopifyOutOfSync(product), listShopifyEventsFor(product.id)]);
   const latestShopify = shopifyEvents[0] ?? null;
+  const categoryIntro = await categoryIntroFor(product.id);
   const siblings = product.designFamilyId ? await listSiblings(product.id, product.designFamilyId) : [];
   const availability = deriveAvailability(product, await loadAvailabilityRules());
   const categoryLabels = allCategories
@@ -309,6 +312,7 @@ export default async function ProductDetailPage({
           <dl className="grid grid-cols-2 gap-3">
             <Field label="Einkaufspreis" value={product.einkaufspreis ? `${product.einkaufspreis} ${product.einkaufspreisWaehrung ?? ""}` : null} />
             <Field label="UVP" value={product.uvp ? `${product.uvp} ${product.uvpWaehrung ?? ""}` : null} />
+            <Field label="Shop-Preis" value={shopPrice(product) !== null ? `${shopPrice(product)} EUR${product.priceOverride !== null ? " (manuell)" : ""}` : null} />
             <Field label="Bestand" value={product.bestand} />
             <Field label="Liefertermin" value={product.liefertermin} />
             <Field label="EAN" value={product.eanCode} />
@@ -439,6 +443,21 @@ export default async function ProductDetailPage({
           </ul>
         </section>
       )}
+
+      <ShopDataSection
+        id={product.id}
+        uvp={product.uvp}
+        isCustom={isCustom}
+        autoPrice={autoShopPrice(product)}
+        autoTitle={autoShopTitle(product)}
+        autoDescription={autoDescriptionPlain(product, categoryIntro)}
+        hasIntro={Boolean(categoryIntro)}
+        override={{
+          title: product.titleOverride ?? "",
+          price: product.priceOverride !== null ? String(product.priceOverride) : "",
+          description: product.descriptionOverride ?? "",
+        }}
+      />
 
       <GeneratedContentSection
         id={product.id}

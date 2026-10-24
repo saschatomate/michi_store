@@ -93,6 +93,10 @@ const PRESERVE_ON_CONFLICT = new Set([
   // für eine Spalte außerhalb der INSERT-Werteliste der Spalten-Default ist (hier NULL) - siehe
   // Root-Cause-Untersuchung des assignedModelKey-Bugs.
   "assignedModelKey",
+  // Manuelle Shop-Daten (Titel/Preis/Beschreibung) - kommen nicht aus der CSV, ein Re-Import darf sie nicht löschen.
+  "titleOverride",
+  "priceOverride",
+  "descriptionOverride",
 ]);
 
 function conflictUpdateSet() {

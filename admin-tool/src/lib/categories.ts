@@ -4,7 +4,13 @@ import { db } from "@/db/client";
 import { categories } from "@/db/schema";
 import type { CategoryNode } from "@/lib/category-rules";
 
-export type CategoryOption = CategoryNode & { label: string; depth: number; slug: string; active: boolean };
+export type CategoryOption = CategoryNode & {
+  label: string;
+  depth: number;
+  slug: string;
+  active: boolean;
+  introText: string | null;
+};
 
 // Alle Kategorien als flache Liste mit Pfad ("Lab Diamonds › Ringe"), Eltern vor Kindern, in
 // Sortierreihenfolge. Der Baum ist beliebig tief (parentId). Inaktive Kategorien sind enthalten
@@ -33,6 +39,7 @@ export async function listCategoryOptions(opts?: { onlyActive?: boolean }): Prom
         depth,
         slug: r.slug,
         active: r.active,
+        introText: r.introText,
       });
       walk(r.id, label, depth + 1);
     }

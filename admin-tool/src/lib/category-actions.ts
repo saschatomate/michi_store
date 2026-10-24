@@ -12,6 +12,7 @@ export type CategoryInput = {
   parentId: number | null;
   ruleStoneOrigin: StoneOrigin | "";
   ruleProductType: string[];
+  introText: string;
 };
 
 function slugify(value: string): string {
@@ -35,6 +36,7 @@ function cleanRules(input: CategoryInput) {
   return {
     ruleStoneOrigin: input.ruleStoneOrigin || null,
     ruleProductType: types.length > 0 ? types.join(",") : null,
+    introText: input.introText.trim() || null,
   };
 }
 

@@ -16,6 +16,7 @@ type Draft = {
   active: boolean;
   ruleStoneOrigin: StoneOrigin | "";
   ruleProductType: string[];
+  introText: string;
 };
 
 export function CategoryManager({
@@ -46,7 +47,7 @@ export function CategoryManager({
   }
 
   function startNew(parentId: number | null) {
-    setDraft({ id: null, name: "", parentId, active: true, ruleStoneOrigin: "", ruleProductType: [] });
+    setDraft({ id: null, name: "", parentId, active: true, ruleStoneOrigin: "", ruleProductType: [], introText: "" });
     setError(null);
   }
 
@@ -58,6 +59,7 @@ export function CategoryManager({
       active: c.active,
       ruleStoneOrigin: c.ruleStoneOrigin ?? "",
       ruleProductType: parseProductTypeRule(c.ruleProductType),
+      introText: c.introText ?? "",
     });
     setError(null);
   }
@@ -69,6 +71,7 @@ export function CategoryManager({
       parentId: draft.parentId,
       ruleStoneOrigin: draft.ruleStoneOrigin,
       ruleProductType: draft.ruleProductType,
+      introText: draft.introText,
     };
     run(
       () => (draft.id === null ? createCategory(input) : updateCategory(draft.id, { ...input, active: draft.active })),
@@ -128,6 +131,11 @@ export function CategoryManager({
                   {c.ruleStoneOrigin && (
                     <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
                       {STONE_ORIGIN_LABELS[c.ruleStoneOrigin]}
+                    </span>
+                  )}
+                  {c.introText && (
+                    <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                      Intro-Text
                     </span>
                   )}
                   {types.length > 0 && (
@@ -252,6 +260,18 @@ export function CategoryManager({
                 ))}
               </div>
             </fieldset>
+            <label className="block sm:col-span-2">
+              <span className="mb-1 block text-xs font-medium text-zinc-600">
+                Intro-Text für den Shop (optional) - steht bei jedem Produkt dieser Kategorie am Anfang der
+                Beschreibung, darunter folgen die Produktdaten
+              </span>
+              <textarea
+                className={inputClass}
+                rows={4}
+                value={draft.introText}
+                onChange={(e) => setDraft({ ...draft, introText: e.target.value })}
+              />
+            </label>
             {draft.id !== null && (
               <label className="flex items-center gap-2 text-sm text-zinc-700">
                 <input

@@ -7,6 +7,8 @@ import { buttonPrimary, buttonSecondary, cardClass } from "@/lib/ui";
 import { formatDateTime } from "@/lib/format";
 import type { ProductStatus } from "@/db/schema";
 
+const APPROVABLE: ProductStatus[] = ["neu", "ausgewaehlt", "in_pipeline", "review"];
+
 export function ShopifyPublishSection({
   id,
   status,
@@ -91,7 +93,7 @@ export function ShopifyPublishSection({
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        {status === "review" && (
+        {APPROVABLE.includes(status) && (
           <button onClick={approve} disabled={isPending} className={buttonPrimary}>
             Für den Shop freigeben
           </button>
@@ -106,9 +108,9 @@ export function ShopifyPublishSection({
             </button>
           </>
         )}
-        {!canPublish && status !== "review" && (
+        {!canPublish && !APPROVABLE.includes(status) && (
           <span className="text-sm text-zinc-500">
-            Übertragung möglich, sobald das Produkt Texte freigegeben hat und für den Shop freigegeben ist.
+            Übertragung möglich, sobald das Produkt für den Shop freigegeben ist.
           </span>
         )}
         {isPending && <span className="text-sm text-zinc-500">Bitte warten…</span>}
