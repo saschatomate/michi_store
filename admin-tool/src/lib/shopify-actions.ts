@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { productAuditLog, sourceProducts } from "@/db/schema";
@@ -54,4 +54,26 @@ export async function publishProductToShopify(id: number, mode: ShopifyMode | "k
   const result = await publishAndRecord(id, { mode });
   refresh(id);
   return result;
+}
+
+
+// Fehlgeschlagene Shopify-Ereignisse aus dem Verlauf entfernen (nur shopify_error, nie erfolgreiche Änderungen).
+export async function deleteShopifyError(eventId: number): Promise<void> {
+  await requireAuth();
+  await db.delete(productAuditLog).where(and(eq(productAuditLog.id, eventId), eq(productAuditLog.action, "shopify_error")));
+  revalidatePath("/shopify-changes");
+  revalidatePath("/products/[id]", "page");
+}
+
+export async function deleteShopifyErrorsOlderThan(days: number): Promise<{ deleted: number }> {
+  await requireAuth();
+  if (!Number.isFinite(days) || days < 0) throw new Error("Ungültige Anzahl Tage.");
+  const before = new Date(Date.now() - days * 24 * 3_600_000);
+  const rows = await db
+    .delete(productAuditLog)
+    .where(and(eq(productAuditLog.action, "shopify_error"), lt(productAuditLog.createdAt, before)))
+    .returning({ id: productAuditLog.id });
+  revalidatePath("/shopify-changes");
+  revalidatePath("/products/[id]", "page");
+  return { deleted: rows.length };
 }

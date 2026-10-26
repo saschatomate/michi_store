@@ -1,5 +1,6 @@
 import { ACTOR_LABEL, SHOPIFY_ACTION_LABEL, type ShopifyAction, type ShopifyChanges } from "@/lib/shopify-changes";
 import { formatDateTime } from "@/lib/format";
+import { DeleteErrorButton } from "@/components/ShopifyErrorCleanup";
 
 export function ShopifyChangeDetails({ changes }: { changes: ShopifyChanges | null }) {
   if (!changes) return null;
@@ -17,7 +18,7 @@ export function ShopifyChangeDetails({ changes }: { changes: ShopifyChanges | nu
   );
 }
 
-export function ShopifyEventHeader({ action, actor, createdAt }: { action: string; actor: string; createdAt: Date }) {
+export function ShopifyEventHeader({ action, actor, createdAt, eventId }: { action: string; actor: string; createdAt: Date; eventId?: number }) {
   const isError = action === "shopify_error";
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -31,6 +32,7 @@ export function ShopifyEventHeader({ action, actor, createdAt }: { action: strin
       <span className="text-zinc-500">
         {formatDateTime(createdAt)} · {ACTOR_LABEL[actor] ?? actor}
       </span>
+      {isError && eventId !== undefined && <DeleteErrorButton eventId={eventId} />}
     </div>
   );
 }

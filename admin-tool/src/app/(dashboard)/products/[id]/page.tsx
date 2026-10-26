@@ -410,7 +410,7 @@ export default async function ProductDetailPage({
           <ul className="space-y-3">
             {shopifyEvents.map((e) => (
               <li key={e.id} className="border-b border-zinc-100 pb-2 last:border-0">
-                <ShopifyEventHeader action={e.action} actor={e.actor} createdAt={e.createdAt} />
+                <ShopifyEventHeader eventId={e.id} action={e.action} actor={e.actor} createdAt={e.createdAt} />
                 <ShopifyChangeDetails changes={e.changes} />
               </li>
             ))}

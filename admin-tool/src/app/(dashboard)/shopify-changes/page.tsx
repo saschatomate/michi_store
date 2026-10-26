@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Radio } from "lucide-react";
 import { listShopifyFeed } from "@/lib/shopify-activity";
 import { ShopifyChangeDetails, ShopifyEventHeader } from "@/components/ShopifyChangeList";
+import { BulkDeleteErrors } from "@/components/ShopifyErrorCleanup";
 import { cardClass } from "@/lib/ui";
 
 export default async function ShopifyChangesPage() {
@@ -27,6 +28,12 @@ export default async function ShopifyChangesPage() {
         </p>
       </div>
 
+      {feed.some((i) => i.action === "shopify_error") && (
+        <div className={`${cardClass} px-4 py-3`}>
+          <BulkDeleteErrors />
+        </div>
+      )}
+
       {feed.length === 0 && (
         <p className={`${cardClass} px-4 py-10 text-center text-sm text-zinc-400`}>
           Noch nichts nach Shopify übertragen oder geändert.
@@ -39,7 +46,7 @@ export default async function ShopifyChangesPage() {
           <div className={`${cardClass} divide-y divide-zinc-100`}>
             {items.map((item) => (
               <div key={item.id} className="px-4 py-3">
-                <ShopifyEventHeader action={item.action} actor={item.actor} createdAt={item.createdAt} />
+                <ShopifyEventHeader eventId={item.id} action={item.action} actor={item.actor} createdAt={item.createdAt} />
                 <div className="mt-1">
                   <Link href={`/products/${item.productId}`} className="text-sm font-medium text-indigo-600 hover:underline">
                     {item.name ?? item.sku}
