@@ -19,17 +19,20 @@ export const DEFAULT_RULES: AvailabilityRules = {
   shipping: { unit: "workdays", min: 1, max: 3 },
 };
 
-// Größenregel (mit dem Nutzer abgestimmt 2026-10-11): aus der Basisgröße des Katalogs lassen sich
-// alle Größen ab 46 bis eine Nummer größer herstellen, nur ganze Größen. Nur die Basisgröße selbst
-// kann Lagerware sein, jede andere Größe ist Anfertigung.
+// Größenregel (angepasst 2026-11-02): im Shop gibt es alle ganzen Größen von 46 bis 60. Aus dem
+// Lager-Einzelstück (Basisgröße, z.B. 48) lassen sich die Größen von 2 kleiner bis 1 größer schnell
+// liefern (46-49, Lieferzeit "auf Lager"); alle übrigen Größen (50-60) werden auf Auftrag gefertigt.
 export const RING_SIZE_MIN = 46;
-export const RING_SIZE_MAX = 62;
-export const RING_SIZE_UP = 1;
+export const RING_SIZE_MAX = 60;
+export const RING_STOCK_DOWN = 2;
+export const RING_STOCK_UP = 1;
 
 export type VariantAvailability = {
   size: string;
   mode: "in_stock" | "made_to_order";
   label: string;
+  // true für genau die Größe des Lager-Einzelstücks - nur dort liegt der physische Bestand.
+  isBaseSize?: boolean;
 };
 
 export type ProductAvailability = {
@@ -50,7 +53,7 @@ export type ProductAvailability = {
 
 function unitLabel(rule: AvailabilityRule): string {
   const unit = rule.unit === "days" ? "Tagen" : rule.unit === "weeks" ? "Wochen" : "Werktagen";
-  return `${rule.min}–${rule.max} ${unit}`;
+  return rule.min === rule.max ? `${rule.min} ${unit}` : `${rule.min}–${rule.max} ${unit}`;
 }
 
 // "1–3 Werktage" (Nominativ, für Sätze wie "beträgt ... etwa 1–3 Werktage").
@@ -69,14 +72,21 @@ export function parseRingSize(value: string | null | undefined): number | null {
   return Number.isFinite(num) ? num : null;
 }
 
-// Basisgröße -> alle verkaufbaren ganzen Größen. Bei Halbgrößen (z.B. 53,5) wird abgerundet.
+// Alle verkaufbaren ganzen Größen: 46 bis 60, bei Basisgrößen außerhalb dieses Bereichs entsprechend
+// erweitert. Bei Halbgrößen (z.B. 53,5) wird abgerundet.
 export function sellableRingSizes(baseSize: number): number[] {
   const base = Math.floor(baseSize);
-  const max = Math.min(base + RING_SIZE_UP, RING_SIZE_MAX);
-  const min = Math.min(RING_SIZE_MIN, base);
+  const min = Math.min(RING_SIZE_MIN, base - RING_STOCK_DOWN);
+  const max = Math.max(RING_SIZE_MAX, base + RING_STOCK_UP);
   const sizes: number[] = [];
   for (let s = min; s <= max; s++) sizes.push(s);
   return sizes;
+}
+
+// Größen, die aus dem Lager-Einzelstück schnell lieferbar sind (Basisgröße -2 bis +1).
+export function stockRingSizes(baseSize: number): number[] {
+  const base = Math.floor(baseSize);
+  return sellableRingSizes(baseSize).filter((s) => s >= base - RING_STOCK_DOWN && s <= base + RING_STOCK_UP);
 }
 
 const MISSING_WARNING_DAYS = 30;
@@ -130,7 +140,7 @@ export function deriveAvailability(
   const modeLabel = (mode: "in_stock" | "made_to_order", r: AvailabilityRule) =>
     mode === "in_stock"
       ? `Auf Lager – versandfertig in ${unitLabel(r)}`
-      : `Anfertigung auf Bestellung – versandfertig in ca. ${unitLabel(r)}`;
+      : `Auf Auftrag individuell gefertigt – Lieferzeit ca. ${unitLabel(r)}`;
 
   // Ringe: eine Variante pro Größe. Eigene Produkte haben eine explizite Größenliste und sind
   // grundsätzlich Anfertigung; DG-Ringe leiten die Größen aus der Basisgröße ab.
@@ -145,13 +155,14 @@ export function deriveAvailability(
     } else {
       const base = parseRingSize(product.ringgroesse);
       if (base !== null) {
-        const stockSize = Number.isInteger(base) ? base : null;
+        const fast = new Set(stockRingSizes(base));
         variants = sellableRingSizes(base).map((size) => {
-          const mode = inStock && size === stockSize ? "in_stock" : "made_to_order";
+          const mode = inStock && fast.has(size) ? "in_stock" : "made_to_order";
           return {
             size: String(size),
             mode,
             label: modeLabel(mode, mode === "in_stock" ? rules.in_stock : madeToOrderRule),
+            isBaseSize: size === Math.floor(base),
           };
         });
       } else {
@@ -172,18 +183,25 @@ export function deriveAvailability(
   };
 }
 
-// Kundentext zur Lieferzeit (Produktbeschreibung, später auch Warenkorb/Checkout im Theme).
+// "46–49" bei lückenlosen Größen, sonst "46, 48, 50".
+function sizeRange(sizes: string[]): string {
+  const nums = sizes.map(Number);
+  const contiguous = nums.every((n, i) => i === 0 || n === nums[i - 1] + 1);
+  return contiguous && nums.length > 1 ? `${nums[0]}–${nums[nums.length - 1]}` : sizes.join(", ");
+}
+
+// Kundentext zur Lieferzeit (Produktbeschreibung). Kein Versandzeit-Satz mehr: es steht nur, ob auf
+// Lager oder auf Auftrag individuell gefertigt wird, und die Lieferzeit.
 export function availabilityParagraph(avail: ProductAvailability, rules: AvailabilityRules): string {
   if (!avail.sellable || !avail.rule || !avail.madeToOrderRule) return "";
-  const shipping = `Anschließend beträgt die Versandzeit innerhalb Deutschlands etwa ${plainUnitLabel(rules.shipping)}.`;
-  const made = `Dieses Schmuckstück wird nach Eingang Ihrer Bestellung individuell für Sie angefertigt. Versandfertig in ca. ${unitLabel(avail.madeToOrderRule)}. ${shipping}`;
+  const made = unitLabel(avail.madeToOrderRule);
 
-  const stockVariant = avail.variants.find((v) => v.mode === "in_stock");
-  if (stockVariant) {
-    return `Auf Lager in Größe ${stockVariant.size}: versandfertig in ${unitLabel(rules.in_stock)}. Alle anderen Größen werden auf Bestellung für Sie angefertigt – versandfertig in ca. ${unitLabel(avail.madeToOrderRule)}. ${shipping}`;
+  const stockSizes = avail.variants.filter((v) => v.mode === "in_stock").map((v) => v.size);
+  if (stockSizes.length > 0) {
+    return `Auf Lager in den Größen ${sizeRange(stockSizes)}: versandfertig in ${unitLabel(rules.in_stock)}. Alle weiteren Größen werden auf Auftrag individuell für Sie gefertigt, daher beträgt die Lieferzeit ca. ${made}.`;
   }
   if (avail.mode === "in_stock") {
-    return `Auf Lager – versandfertig in ${unitLabel(rules.in_stock)}. ${shipping}`;
+    return `Auf Lager – versandfertig in ${unitLabel(rules.in_stock)}.`;
   }
-  return `Anfertigung auf Bestellung. ${made}`;
+  return `Dieses Schmuckstück wird auf Auftrag individuell für Sie gefertigt, daher beträgt die Lieferzeit ca. ${made}.`;
 }

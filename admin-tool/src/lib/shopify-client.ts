@@ -190,6 +190,21 @@ export type ProductSetResult = {
 // productSet legt an (ohne identifier) oder aktualisiert (mit identifier.id) in einem Aufruf -
 // Optionen, Varianten, Metafields, Medien und Kollektionen inklusive. synchronous: Ergebnis liegt
 // vor, wenn die Antwort kommt.
+// Standort, an dem der Anfangsbestand eingetragen wird (erster aktive Standort des Shops). Gibt null
+// zurück, wenn er nicht lesbar ist (z.B. fehlende Berechtigung read_locations) - dann wird ohne
+// Bestandsmenge übertragen statt die Übertragung scheitern zu lassen.
+export async function shopifyPrimaryLocationId(): Promise<string | null> {
+  try {
+    const data = await shopifyGraphql<{ locations: { nodes: { id: string }[] } }>(
+      `query { locations(first: 1) { nodes { id } } }`,
+    );
+    return data.locations.nodes[0]?.id ?? null;
+  } catch (err) {
+    console.error("[shopify] Standort konnte nicht gelesen werden, Bestand wird nicht gesetzt:", err);
+    return null;
+  }
+}
+
 export async function shopifyProductSet(
   input: Record<string, unknown>,
   existingId: string | null,

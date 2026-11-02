@@ -11,7 +11,7 @@
 // - Nachziehen: nach jeder Übertragung wird eine Prüfsumme gespeichert. Weicht die aktuelle
 //   Berechnung davon ab (Preis, Text, Lieferzeit, Kategorien, Bilder ...), ist Shopify nicht mehr
 //   aktuell - resyncChangedProducts() (nächtlicher Cron) und der Knopf am Produkt ziehen es nach.
-// - Bestandsmengen werden nicht gesetzt (Standard 0 bei Verfolgung) und bei Updates nie überschrieben,
+// - Der Anfangsbestand kommt beim Erstanlegen aus der DG-Datei (bestand); bei Updates werden Mengen nie überschrieben,
 //   damit durch Bestellungen entstandene Minusbestände (= offene Anfertigungen) erhalten bleiben.
 import { createHash } from "node:crypto";
 import { and, asc, eq, isNotNull, inArray, or } from "drizzle-orm";
@@ -19,6 +19,7 @@ import { db } from "@/db/client";
 import { categories, productAuditLog, productCategories, productGeneratedImages, sourceProducts } from "@/db/schema";
 import {
   shopifyEnsureCollection,
+  shopifyPrimaryLocationId,
   shopifyProductSet,
   shopifyPublishEverywhere,
   shopifyReplaceMedia,
@@ -38,19 +39,17 @@ const NS = "marinell";
 export type ShopifyMode = "draft" | "active";
 
 
-// Reihenfolge: Originalbilder (bei eigenen Produkten die selbst hochgeladenen), danach freigegebene
-// KI-Bilder. Ein eigenes "Hauptbild"-Flag für das Shop-Raster gibt es noch nicht.
+// Nur Bilder, die von Hand freigegeben wurden (KI-generierte und selbst hochgeladene in den 6 Bild-Slots,
+// siehe GeneratedImagesSection), in Slot-Reihenfolge. Die Originalbilder aus der DG-Datei (und die
+// Rohbilder eigener Produkte) gehen bewusst NIE automatisch nach Shopify. Ein eigenes "Hauptbild"-Flag
+// für das Shop-Raster gibt es noch nicht - das erste freigegebene Bild ist das Hauptbild.
 export async function collectShopifyImageUrls(product: SourceProduct): Promise<string[]> {
-  const originals =
-    product.origin === "custom"
-      ? (product.customImages ?? []).map((i) => i.url)
-      : [product.freistellerUrl, product.modelbildUrl, ...(product.bildUrls ?? [])];
   const approved = await db
     .select({ url: productGeneratedImages.imageUrl })
     .from(productGeneratedImages)
     .where(and(eq(productGeneratedImages.sourceProductId, product.id), eq(productGeneratedImages.status, "approved")))
     .orderBy(asc(productGeneratedImages.variantIndex));
-  return [...originals, ...approved.map((a) => a.url)].filter((u): u is string => Boolean(u));
+  return approved.map((a) => a.url).filter((u): u is string => Boolean(u));
 }
 
 type Metafield = { namespace: string; key: string; type: string; value: string };
@@ -120,8 +119,10 @@ export function buildProductSetInput(args: {
   categorySlugs: string[];
   options: { mode: ShopifyMode; isTest?: boolean };
   isCreate: boolean;
+  // Standort für den Anfangsbestand - nur beim Erstanlegen gesetzt (siehe quantities unten).
+  locationId?: string | null;
 }) {
-  const { product, availability, paragraph, intro, imageUrls, collectionIds, categorySlugs, options, isCreate } = args;
+  const { product, availability, paragraph, intro, imageUrls, collectionIds, categorySlugs, options, isCreate, locationId } = args;
 
   const sellingPrice = shopPrice(product);
   if (sellingPrice === null) {
@@ -142,6 +143,13 @@ export function buildProductSetInput(args: {
     ...metafield("lead_time_text", "single_line_text_field", label),
   ];
 
+  // Anfangsbestand aus der DG-Datei (bestand): nur beim ERSTEN Anlegen. Danach führt Shopify den Bestand
+  // selbst (Bestellungen buchen ab, Minusbestände = offene Anfertigungen) und wird nie überschrieben.
+  // Bei Ringen liegt der einzelne Lagerring in seiner Basisgröße, alle anderen Größen starten bei 0.
+  const stock = Math.max(0, Math.floor(product.bestand ?? 0));
+  const quantities = (qty: number) =>
+    isCreate && locationId && qty > 0 ? { inventoryQuantities: [{ locationId, name: "available", quantity: qty }] } : {};
+
   const variants = isRing
     ? availability.variants.map((v) => ({
         optionValues: [{ optionName: "Ringgröße", name: v.size }],
@@ -149,6 +157,7 @@ export function buildProductSetInput(args: {
         inventoryPolicy: "CONTINUE",
         inventoryItem: { sku: `${product.modellErweitert}-${v.size}`, tracked: true, requiresShipping: true },
         metafields: variantMeta(v.mode, v.label),
+        ...quantities(v.isBaseSize ? stock : 0),
       }))
     : [
         {
@@ -158,6 +167,7 @@ export function buildProductSetInput(args: {
           inventoryPolicy: "CONTINUE",
           inventoryItem: { sku: product.modellErweitert, tracked: true, requiresShipping: true },
           metafields: variantMeta(availability.mode, availability.label),
+          ...quantities(stock),
         },
       ];
 
@@ -300,7 +310,7 @@ export async function syncProductToShopify(productId: number, options: SyncOptio
   if (product.hauptkategorie === "Ring" && availability.variants.length === 0) {
     throw new Error("Für diesen Ring lassen sich keine Größenvarianten ableiten (Basisgröße fehlt).");
   }
-  if (imageUrls.length === 0) throw new Error("Kein Bild vorhanden.");
+  if (imageUrls.length === 0) throw new Error("Kein freigegebenes Bild - nur freigegebene Bilder gehen nach Shopify.");
 
   const signature = signatureOf(product, prep);
   if (options.onlyIfChanged && existingId && product.shopifyStatus !== "archived" && signature === product.shopifySyncSignature) {
@@ -321,6 +331,7 @@ export async function syncProductToShopify(productId: number, options: SyncOptio
   }
 
   const categorySlugs = chain.map((c) => c.slug);
+  let locationId = existingId ? null : await shopifyPrimaryLocationId();
   const build = (isCreate: boolean) =>
     buildProductSetInput({
       product,
@@ -332,6 +343,7 @@ export async function syncProductToShopify(productId: number, options: SyncOptio
       categorySlugs,
       options: { mode, isTest: options.isTest },
       isCreate,
+      locationId,
     });
 
   let currentId = existingId;
@@ -345,6 +357,7 @@ export async function syncProductToShopify(productId: number, options: SyncOptio
     const message = err instanceof Error ? err.message : String(err);
     if (!currentId || !/identifier was not found/i.test(message)) throw err;
     currentId = null;
+    locationId = await shopifyPrimaryLocationId();
     input = build(true);
     result = await shopifyProductSet(input, null);
   }
@@ -466,7 +479,7 @@ export async function shopReadinessProblems(product: SourceProduct): Promise<str
   const problems: string[] = [];
   if (product.discontinued) problems.push("Produkt ist als nicht mehr lieferbar markiert");
   if (shopPrice(product) === null) problems.push("Verkaufspreis fehlt");
-  if ((await collectShopifyImageUrls(product)).length === 0) problems.push("Kein Bild vorhanden");
+  if ((await collectShopifyImageUrls(product)).length === 0) problems.push("Kein freigegebenes Bild (nur freigegebene Bilder gehen nach Shopify)");
   if (product.hauptkategorie === "Ring") {
     const availability = deriveAvailability(product, await loadAvailabilityRules());
     if (availability.variants.length === 0) problems.push("Ringgrößen lassen sich nicht ableiten");

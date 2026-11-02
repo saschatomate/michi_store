@@ -477,6 +477,7 @@ function ImageCard({
             }
           >
             {statusLabel[item.status]}
+            {item.status === "approved" && " · geht nach Shopify"}
           </span>
         </div>
         {item.costUsd !== null && (
@@ -698,7 +699,7 @@ export function GeneratedImagesSection({
           )}
           <p className="mb-3 text-xs text-zinc-500">
             Bis zu {MAX_IMAGE_SLOTS} Bilder pro Produkt: KI-generierte oder selbst hochgeladene (JPG, PNG, WebP).
-            Eigene Bilder gelten sofort als freigegeben.
+            Eigene Bilder gelten sofort als freigegeben. <strong>Nur freigegebene Bilder gehen nach Shopify</strong> - die Originalbilder aus der Excel nie.
           </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {Array.from({ length: MAX_IMAGE_SLOTS }, (_, slot) => {

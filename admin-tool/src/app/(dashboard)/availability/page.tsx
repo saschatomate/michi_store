@@ -1,7 +1,7 @@
 import { Clock } from "lucide-react";
 import { loadAvailabilityRules } from "@/lib/availability-rules";
 import { AvailabilityRulesForm } from "@/components/AvailabilityRulesForm";
-import { RING_SIZE_MAX, RING_SIZE_MIN, RING_SIZE_UP } from "@/lib/availability";
+import { RING_SIZE_MAX, RING_SIZE_MIN, RING_STOCK_DOWN, RING_STOCK_UP } from "@/lib/availability";
 
 export default async function AvailabilityPage() {
   const rules = await loadAvailabilityRules();
@@ -21,9 +21,10 @@ export default async function AvailabilityPage() {
       </div>
       <AvailabilityRulesForm rules={rules} />
       <p className="text-xs text-zinc-500">
-        Ringgrößen: aus der Basisgröße des Katalogs sind alle ganzen Größen von {RING_SIZE_MIN} bis
-        Basisgröße +{RING_SIZE_UP} (höchstens {RING_SIZE_MAX}) herstellbar. Lagerware gibt es nur in der
-        Basisgröße, alle anderen Größen sind Anfertigung.
+        Ringgrößen: im Shop gibt es alle ganzen Größen von {RING_SIZE_MIN} bis {RING_SIZE_MAX}. Aus dem
+        Lager-Einzelstück (Basisgröße) sind die Größen von Basisgröße −{RING_STOCK_DOWN} bis +{RING_STOCK_UP}
+        (z.B. Basis 48: 46–49) mit der Lieferzeit „Auf Lager“ lieferbar, alle anderen Größen werden auf
+        Auftrag gefertigt.
       </p>
     </div>
   );
