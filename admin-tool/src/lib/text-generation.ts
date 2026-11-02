@@ -77,6 +77,14 @@ Regeln:
   wiederholen. Grenze: Bilder und Stimmung sind frei, aber sie dürfen keine zusätzlichen
   Fakten behaupten (keine erfundene Herkunft, Handarbeit, Geschichte der Steine, Designer, Anzahl
   oder Qualität, die nicht in den Daten steht).
+- Abwechslung ist eine harte Anforderung: Alle Texte werden einzeln und ohne Kenntnis der anderen
+  erzeugt, sehen aber nebeneinander im Shop. Deshalb bekommst du pro Aufruf eine "Variationsvorgabe"
+  (Einstieg, Bildwelt, Satzbau, Perspektive, Länge). Setze sie konsequent um - sie hat Vorrang vor
+  deinen Gewohnheiten. Vermeide die typischen Standardwendungen: "Es gibt Momente, in denen ...",
+  "mehr als nur ein Schmuckstück", "ein Statement", "Hauch von", "verleiht", "unterstreicht",
+  "setzt ein Zeichen", "für alle, die ...", "zeitlose Eleganz", "Symbol für", "die perfekte Wahl".
+  Beginne weder Kurz- noch Langbeschreibung mit "Dieses", "Dieser" oder dem Produktnamen, und
+  verwende pro Text jedes Bild und jedes Verb nur einmal.
 - Ton: leise, diskret, warm - niemals reißerisch, niemals lautstarke Superlative ("atemberaubend",
   "spektakulär"). Zurückhaltung ist bei MARINELL selbst ein Qualitätsmerkmal.
 - Ist "steinHerkunft" angegeben, gilt sie absolut: Ein Labordiamant wird nie als natürlich oder
@@ -148,6 +156,62 @@ function buildProductFacts(product: SourceProductRow): Record<string, unknown> {
   };
 }
 
+// Pro Aufruf zufällig gezogene Variationsvorgabe: Weil jedes Produkt in einem eigenen API-Aufruf
+// entsteht, können sich die Texte sonst nicht voneinander abgrenzen und klingen nach einer Vorlage.
+// Die Auswahl ist bewusst zufällig (nicht an die Produkt-ID gebunden), damit "Neu generieren" auch
+// wirklich einen anderen Text liefert.
+const VARIATION = {
+  einstieg: [
+    "mit einer konkreten Sinneswahrnehmung (Gewicht, Kühle, Licht auf der Haut)",
+    "mit einem Moment aus dem Alltag, in dem das Stück getragen wird",
+    "mit dem Material und seiner Farbe",
+    "mit einer ruhigen, unerwarteten Beobachtung über Form oder Proportion",
+    "mit einem kurzen, ungewöhnlichen Satz aus nur wenigen Wörtern",
+    "mit einem Gegensatz (zart und beständig, still und leuchtend, klein und bedeutend)",
+    "mit der Zeit: ein Morgen, ein Abend, eine Jahreszeit",
+  ],
+  bildwelt: [
+    "Licht und Schatten",
+    "Wasser und Morgentau",
+    "Stein, Erde und Mineral",
+    "Stoff, Haut und Berührung",
+    "Architektur und Linien",
+    "Jahreszeiten und Wetter",
+    "Musik und Stille",
+    "Handwerk, Papier und Schrift",
+    "Wald, Moos und Blätter",
+  ],
+  satzbau: [
+    "überwiegend kurze, klare Sätze",
+    "ein langer, fließender Satz in der Mitte, drumherum kurze",
+    "Sätze, die mit einem Nebensatz oder einer Zeitangabe beginnen",
+    "abwechselnd ein knapper und ein ausführlicher Satz",
+  ],
+  perspektive: [
+    "aus Sicht der Trägerin oder des Trägers",
+    "aus Sicht einer beschenkten Person",
+    "als ruhige Beobachtung des Stücks selbst",
+    "aus Sicht einer Person, die das Stück zum ersten Mal sieht",
+  ],
+  laenge: ["Langbeschreibung eher kurz (4 Sätze)", "Langbeschreibung mittel (5 Sätze)", "Langbeschreibung etwas ausführlicher (6 Sätze)"],
+} as const;
+
+function pick<T>(items: readonly T[]): T {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+function variationBrief(): string {
+  return [
+    `Einstieg der Langbeschreibung: ${pick(VARIATION.einstieg)}`,
+    `Leitende Bildwelt (auch für den Produktnamen): ${pick(VARIATION.bildwelt)}`,
+    `Satzbau: ${pick(VARIATION.satzbau)}`,
+    `Perspektive: ${pick(VARIATION.perspektive)}`,
+    `Länge: ${pick(VARIATION.laenge)}`,
+  ]
+    .map((line) => `- ${line}`)
+    .join("\n");
+}
+
 export async function generateProductContent(product: SourceProductRow): Promise<GeneratedContent> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -169,7 +233,7 @@ export async function generateProductContent(product: SourceProductRow): Promise
     messages: [
       {
         role: "user",
-        content: `Erzeuge die Produkttexte für dieses Schmuckstück (JSON-Fakten):\n\n${JSON.stringify(facts, null, 2)}`,
+        content: `Erzeuge die Produkttexte für dieses Schmuckstück.\n\nVariationsvorgabe für diesen Text (verbindlich):\n${variationBrief()}\n\nProduktfakten (JSON):\n${JSON.stringify(facts, null, 2)}`,
       },
     ],
   });
