@@ -1,0 +1,1 @@
+ALTER TABLE "source_products" ADD COLUMN "shopify_synced_stock" integer;

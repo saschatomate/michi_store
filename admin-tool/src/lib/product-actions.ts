@@ -7,6 +7,7 @@ import { sourceProducts, productCategories, STATUS_VALUES, type ProductStatus } 
 import { requireAuth } from "@/lib/dal";
 import { sendToPipelineWebhook } from "@/lib/pipeline-webhook";
 import { generateProductContent, type GeneratedContent } from "@/lib/text-generation";
+import { adoptFirstDgImage } from "@/lib/dg-image-adopt";
 import { getMissingFields, FIELD_LABELS } from "@/lib/custom-product";
 
 const MAX_PIPELINE_BATCH_SIZE = 20;
@@ -62,9 +63,9 @@ async function generateAndSave(product: typeof sourceProducts.$inferSelect): Pro
   }
 }
 
-export async function sendSelectedToPipeline(ids: number[]): Promise<{ sent: number }> {
+export async function sendSelectedToPipeline(ids: number[]): Promise<{ sent: number; bulk: boolean }> {
   await requireAuth();
-  if (ids.length === 0) return { sent: 0 };
+  if (ids.length === 0) return { sent: 0, bulk: false };
   if (ids.length > MAX_PIPELINE_BATCH_SIZE) {
     throw new Error(`Maximal ${MAX_PIPELINE_BATCH_SIZE} Artikel gleichzeitig senden.`);
   }
@@ -98,14 +99,21 @@ export async function sendSelectedToPipeline(ids: number[]): Promise<{ sent: num
     rows.map((r) => sendToPipelineWebhook({ sourceProductId: r.id, modellErweitert: r.modellErweitert })),
   );
 
-  // Textgenerierung parallel je Artikel; einzelne Fehler landen in contentGenerationError statt
+  // Mehrfachauswahl: keine automatische Textgenerierung (Shop-Text kommt aus den Produktfakten) und
+  // nur das erste DG-Bild wird automatisch freigegeben - Einzelbearbeitung wäre sonst zu aufwendig.
+  // Einzelauswahl: wie bisher mit KI-Text. Einzelne Fehler landen in contentGenerationError statt
   // den gesamten Batch abzubrechen.
-  await Promise.all(rows.map((r) => generateAndSave(r)));
+  const bulk = rows.length > 1;
+  if (bulk) {
+    for (const r of rows) await adoptFirstDgImage(r);
+  } else {
+    await Promise.all(rows.map((r) => generateAndSave(r)));
+  }
 
   revalidatePath("/");
   revalidatePath("/mapping");
   revalidatePath("/", "layout");
-  return { sent: rows.length };
+  return { sent: rows.length, bulk };
 }
 
 export async function updateProductStatus(id: number, status: ProductStatus): Promise<void> {

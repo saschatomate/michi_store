@@ -24,6 +24,7 @@ import {
   shopifyPublishEverywhere,
   shopifyReplaceMedia,
   shopifySetProductStatus,
+  shopifySetStockBySku,
 } from "@/lib/shopify-client";
 import { availabilityParagraph, deriveAvailability, type ProductAvailability } from "@/lib/availability";
 import { loadAvailabilityRules } from "@/lib/availability-rules";
@@ -346,8 +347,13 @@ export async function syncProductToShopify(productId: number, options: SyncOptio
       locationId,
     });
 
+  // "keep" bei bestehendem Produkt: Status gar nicht erst mitschicken, damit ein in Shopify von Hand
+  // live geschalteter Artikel nicht auf Entwurf zurückfällt.
+  const keepLiveStatus = options.mode === "keep" && Boolean(existingId);
+  const withoutStatus = <T extends { status?: string }>(i: T): T => (keepLiveStatus ? { ...i, status: undefined } : i);
+
   let currentId = existingId;
-  let input = build(!currentId);
+  let input = withoutStatus(build(!currentId));
   let result;
   try {
     result = await shopifyProductSet(input, currentId);
@@ -369,7 +375,8 @@ export async function syncProductToShopify(productId: number, options: SyncOptio
     await shopifyReplaceMedia(result.id, imageUrls, product.genProductNameDe || product.kurzBezeichnungDe || product.modellErweitert);
   }
 
-  const finalStatus: ShopifyMode = input.status === "ACTIVE" ? "active" : "draft";
+  // Bei "keep" wurde kein Status mitgeschickt - maßgeblich ist, was in Shopify tatsächlich steht.
+  const finalStatus: ShopifyMode = (keepLiveStatus ? result.status : input.status) === "ACTIVE" ? "active" : "draft";
   if (finalStatus === "active") {
     await shopifyPublishEverywhere(result.id);
     for (const id of collectionIds) await shopifyPublishEverywhere(id);
@@ -386,6 +393,7 @@ export async function syncProductToShopify(productId: number, options: SyncOptio
       shopifySyncedAt: new Date(),
       shopifySyncError: null,
       shopifySyncSignature: signature,
+      shopifySyncedStock: Math.max(0, Math.floor(product.bestand ?? 0)),
       shopifyImageUrls: imageUrls,
       shopifySnapshot: snapshot,
       updatedAt: new Date(),
@@ -442,34 +450,60 @@ export async function publishAndRecord(id: number, options: SyncOptions): Promis
 
 export type ResyncSummary = { checked: number; updated: number; unchanged: number; failed: number; remaining: number };
 
-// Nächtlicher Nachlauf: alle Produkte, die schon in Shopify liegen, werden geprüft und bei
-// Abweichung (Preis, Text, Lieferzeit/Lagerstatus, Kategorien, Bilder, ausgelistet) aktualisiert.
-// Pro Lauf höchstens `limit` Übertragungen, der Rest folgt beim nächsten Lauf (die Prüfsumme bleibt
-// ja abweichend). Fehlgeschlagene Produkte werden jede Nacht erneut versucht.
-export async function resyncChangedProducts(limit = 25): Promise<ResyncSummary> {
+// Nächtlicher Abgleich nach dem DG-Sync: überträgt NUR die Stückzahl. Preis, Texte, Bilder,
+// Kategorien und der Shopify-Status (live/Entwurf) bleiben unangetastet - die pflegt man im Tool
+// bzw. direkt in Shopify. Geschrieben wird nur, wenn sich der DG-Bestand seit der letzten
+// Übertragung geändert hat; bei Ringen betrifft das die Basisgröße (dort liegt der Lagerring).
+// Einzige Ausnahme: manuell als nicht mehr lieferbar markierte Produkte werden archiviert.
+export async function resyncStockLevels(limit = 200): Promise<ResyncSummary> {
   const candidates = await db
     .select()
     .from(sourceProducts)
-    .where(
-      and(
-        isNotNull(sourceProducts.shopifyProductId),
-        or(inArray(sourceProducts.status, ["veroeffentlicht", "uebertragungsfehler"]), eq(sourceProducts.discontinued, true)),
-      ),
-    )
+    .where(isNotNull(sourceProducts.shopifyProductId))
     .orderBy(asc(sourceProducts.shopifySyncedAt));
+  const rules = await loadAvailabilityRules();
 
   const summary: ResyncSummary = { checked: 0, updated: 0, unchanged: 0, failed: 0, remaining: 0 };
   for (const product of candidates) {
     summary.checked++;
-    if (summary.updated + summary.failed >= limit) {
-      // Nur noch zählen, was sich geändert hat - ohne zu übertragen.
-      if (await isShopifyOutOfSync(product).catch(() => true)) summary.remaining++;
-      continue;
+    const stock = Math.max(0, Math.floor(product.bestand ?? 0));
+    try {
+      if (product.discontinued) {
+        if (product.shopifyStatus === "archived") { summary.unchanged++; continue; }
+        if (summary.updated + summary.failed >= limit) { summary.remaining++; continue; }
+        await syncProductToShopify(product.id, { mode: "keep", onlyIfChanged: true, actor: "cron" });
+        summary.updated++;
+        continue;
+      }
+      if (product.shopifySyncedStock === stock) { summary.unchanged++; continue; }
+      if (product.shopifySyncedStock === null) {
+        // Bisher kein Vergleichswert gespeichert: nur merken, nichts nach Shopify schreiben.
+        await db.update(sourceProducts).set({ shopifySyncedStock: stock }).where(eq(sourceProducts.id, product.id));
+        summary.unchanged++;
+        continue;
+      }
+      if (summary.updated + summary.failed >= limit) { summary.remaining++; continue; }
+
+      const availability = deriveAvailability(product, rules);
+      const quantities = new Map<string, number>();
+      if (availability.variants.length > 0) {
+        const base = availability.variants.find((v) => v.isBaseSize);
+        if (base) quantities.set(`${product.modellErweitert}-${base.size}`, stock);
+      } else {
+        quantities.set(product.modellErweitert, stock);
+      }
+      const written = await shopifySetStockBySku(product.shopifyProductId!, quantities);
+      if (written === 0) throw new Error("Keine passende Variante in Shopify gefunden.");
+
+      await db.update(sourceProducts).set({ shopifySyncedStock: stock }).where(eq(sourceProducts.id, product.id));
+      await logShopify(product.id, "shopify_updated", "cron", {
+        Bestand: { from: product.shopifySyncedStock === null ? null : String(product.shopifySyncedStock), to: String(stock) },
+      });
+      summary.updated++;
+    } catch (err) {
+      summary.failed++;
+      console.error(`[shopify-stock] ${product.modellErweitert}:`, err instanceof Error ? err.message : err);
     }
-    const res = await publishAndRecord(product.id, { mode: "keep", onlyIfChanged: true, actor: "cron" });
-    if (!res.ok) summary.failed++;
-    else if (res.skipped) summary.unchanged++;
-    else summary.updated++;
   }
   return summary;
 }

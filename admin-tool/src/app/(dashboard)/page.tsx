@@ -80,7 +80,7 @@ export default async function ProductListPage({
     status: r.status,
     thumbnailUrl: r.freistellerUrl ?? r.bildUrls?.[0] ?? null,
     isNewArrival: isNewArrival(r.newArrivalAt),
-    isMissingFromStock: r.missingFromStockAt !== null,
+    isMissingFromStock: r.missingFromStockAt !== null && !((r.bestand ?? 0) > 0),
     isCustom: r.origin === "custom",
     isDiscontinued: r.discontinued,
     shopifyStatus: r.shopifyProductId ? r.shopifyStatus : null,

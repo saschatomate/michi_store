@@ -76,7 +76,11 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
     const ids = Array.from(selected);
     startTransition(async () => {
       const result = await sendSelectedToPipeline(ids);
-      setFeedback(`${result.sent} Artikel in Pipeline gesendet, Texte generiert.`);
+      setFeedback(
+        result.bulk
+          ? `${result.sent} Artikel in Pipeline gesendet. Erstes DG-Bild ist freigegeben, keine KI-Texte - weitere Bilder pro Produkt ergänzbar.`
+          : `${result.sent} Artikel in Pipeline gesendet, Texte generiert.`,
+      );
       setSelected(new Set());
     });
   }

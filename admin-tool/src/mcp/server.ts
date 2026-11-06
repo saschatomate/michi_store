@@ -32,7 +32,7 @@ function summarize(p: typeof sourceProducts.$inferSelect) {
     bestand: p.bestand,
     status: p.status,
     herkunft: p.origin === "custom" ? "eigenes Produkt" : "Diamond Group",
-    nichtMehrBeiDiamondGroup: p.missingFromStockAt !== null,
+    nichtMehrBeiDiamondGroup: p.missingFromStockAt !== null && !((p.bestand ?? 0) > 0),
     ausgelistet: p.discontinued,
     anShopify: p.shopifyProductId ? (p.shopifyStatus ?? "übertragen") : null,
   };
@@ -176,7 +176,7 @@ server.registerTool(
         .select({
           gesamt: sql<number>`count(*)::int`,
           anShopify: sql<number>`count(${sourceProducts.shopifyProductId})::int`,
-          nichtMehrBeiDiamondGroup: sql<number>`count(${sourceProducts.missingFromStockAt})::int`,
+          nichtMehrBeiDiamondGroup: sql<number>`count(*) filter (where ${sourceProducts.missingFromStockAt} is not null and coalesce(${sourceProducts.bestand}, 0) <= 0)::int`,
           eigene: sql<number>`count(*) filter (where ${sourceProducts.origin} = 'custom')::int`,
           ausgelistet: sql<number>`count(*) filter (where ${sourceProducts.discontinued})::int`,
         })

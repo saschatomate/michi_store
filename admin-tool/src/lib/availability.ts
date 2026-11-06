@@ -20,12 +20,12 @@ export const DEFAULT_RULES: AvailabilityRules = {
 };
 
 // Größenregel (angepasst 2026-11-02): im Shop gibt es alle ganzen Größen von 46 bis 60. Aus dem
-// Lager-Einzelstück (Basisgröße, z.B. 48) lassen sich die Größen von 2 kleiner bis 1 größer schnell
-// liefern (46-49, Lieferzeit "auf Lager"); alle übrigen Größen (50-60) werden auf Auftrag gefertigt.
+// Lager-Einzelstück (Basisgröße, z.B. 48) lassen sich die Größen von 2 kleiner bis 2 größer schnell
+// liefern (46-50, Lieferzeit "auf Lager"); alle übrigen Größen (51-60) werden auf Auftrag gefertigt.
 export const RING_SIZE_MIN = 46;
 export const RING_SIZE_MAX = 60;
 export const RING_STOCK_DOWN = 2;
-export const RING_STOCK_UP = 1;
+export const RING_STOCK_UP = 2;
 
 export type VariantAvailability = {
   size: string;
@@ -128,7 +128,7 @@ export function deriveAvailability(
   if (originAssumed) {
     warnings.push("Steinherkunft unbekannt – es wird mit der längeren Lieferzeit für Naturdiamanten gerechnet.");
   }
-  if (product.missingFromStockAt) {
+  if (product.missingFromStockAt && !inStock) {
     const days = Math.floor((now.getTime() - product.missingFromStockAt.getTime()) / 86_400_000);
     if (days >= MISSING_WARNING_DAYS) {
       warnings.push(

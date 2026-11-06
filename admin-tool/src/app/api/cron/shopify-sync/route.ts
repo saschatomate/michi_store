@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { resyncChangedProducts } from "@/lib/shopify-sync";
+import { resyncStockLevels } from "@/lib/shopify-sync";
 
-// Läuft nach dem Diamond-Group-Sync (siehe vercel.json): zieht alle Produkte, die schon in Shopify
-// liegen und sich seit der letzten Übertragung geändert haben, nach (Preis, Texte, Lieferzeit bei
-// geändertem Lagerbestand, Kategorien, Bilder, ausgelistet -> archiviert). Eigene Route statt
+// Läuft nach dem Diamond-Group-Sync (siehe vercel.json): überträgt nur geänderte Stückzahlen nach
+// Shopify (Preis, Texte, Bilder und Live/Entwurf-Status bleiben unberührt). Eigene Route statt
 // Anhängsel des DG-Syncs, damit beide ihr eigenes Zeitlimit haben.
 export const maxDuration = 300;
 
@@ -14,7 +13,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const summary = await resyncChangedProducts();
+  const summary = await resyncStockLevels();
 
   revalidatePath("/");
   revalidatePath("/mapping");

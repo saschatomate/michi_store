@@ -127,6 +127,9 @@ export const sourceProducts = pgTable(
     // aktuell und das Produkt wird nachgezogen (shopify-sync.ts). shopifyImageUrls: die zuletzt
     // übertragenen Bilder, damit Bildänderungen erkannt werden.
     shopifySyncSignature: text("shopify_sync_signature"),
+    // Bestand, der zuletzt nach Shopify geschrieben wurde - der nächtliche Abgleich überträgt nur,
+    // wenn sich der DG-Bestand seitdem geändert hat (shopify-sync.ts: resyncStockLevels).
+    shopifySyncedStock: integer("shopify_synced_stock"),
     shopifyImageUrls: jsonb("shopify_image_urls").$type<string[]>(),
     // Lesbarer Stand der letzten Übertragung (Preis, Lieferzeit, Titel ...). Dient nur dazu, bei der
     // nächsten Übertragung "alt -> neu" für den Shopify-Verlauf zu berechnen.

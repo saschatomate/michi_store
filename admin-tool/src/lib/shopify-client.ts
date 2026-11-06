@@ -284,6 +284,32 @@ export async function shopifySetProductStatus(id: string, status: "ACTIVE" | "DR
 // Ersetzt alle Produktbilder durch die übergebene Liste (Reihenfolge = Reihenfolge der Liste).
 // Bewusst "alles löschen, alles neu anlegen" statt eines Einzelabgleichs: Shopify liefert für
 // Bilder nur die eigenen CDN-URLs zurück, eine Zuordnung zur Original-URL ist nicht möglich.
+// Setzt den Bestand einzelner Varianten (nach SKU) auf feste Werte - sonst wird nichts angefasst.
+// Gibt die Anzahl tatsächlich geschriebener Varianten zurück (0, wenn Standort/SKU nicht gefunden).
+export async function shopifySetStockBySku(productId: string, quantities: Map<string, number>): Promise<number> {
+  const locationId = await shopifyPrimaryLocationId();
+  if (!locationId) throw new Error("Shopify-Standort nicht lesbar (Berechtigung read_locations prüfen).");
+  const data = await shopifyGraphql<{
+    product: { variants: { nodes: { sku: string | null; inventoryItem: { id: string } }[] } } | null;
+  }>(
+    `query($id: ID!) { product(id: $id) { variants(first: 100) { nodes { sku inventoryItem { id } } } } }`,
+    { id: productId },
+  );
+  if (!data.product) throw new Error("Produkt in Shopify nicht gefunden.");
+  const changes = data.product.variants.nodes
+    .filter((v) => v.sku && quantities.has(v.sku))
+    .map((v) => ({ inventoryItemId: v.inventoryItem.id, locationId, quantity: quantities.get(v.sku!)! }));
+  if (changes.length === 0) return 0;
+  const res = await shopifyGraphql<{ inventorySetQuantities: { userErrors: ShopifyUserError[] } }>(
+    `mutation($input: InventorySetQuantitiesInput!) {
+      inventorySetQuantities(input: $input) { userErrors { field message } }
+    }`,
+    { input: { name: "available", reason: "correction", ignoreCompareQuantity: true, quantities: changes } },
+  );
+  throwOnUserErrors("Shopify inventorySetQuantities", res.inventorySetQuantities.userErrors);
+  return changes.length;
+}
+
 export async function shopifyReplaceMedia(productId: string, urls: string[], alt: string): Promise<void> {
   const existing = await shopifyGraphql<{ product: { media: { nodes: { id: string }[] } } }>(
     `query($id: ID!) { product(id: $id) { media(first: 100) { nodes { id } } } }`,

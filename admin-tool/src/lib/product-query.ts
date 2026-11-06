@@ -129,7 +129,7 @@ export function buildWhere(filters: ProductFilters): SQL | undefined {
   if (filters.newArrivalOnly) {
     conditions.push(gte(sourceProducts.newArrivalAt, sql`now() - interval '${sql.raw(String(NEW_ARRIVAL_WINDOW_DAYS))} days'`));
   }
-  if (filters.missingOnly) conditions.push(isNotNull(sourceProducts.missingFromStockAt));
+  if (filters.missingOnly) conditions.push(isNotNull(sourceProducts.missingFromStockAt), sql`coalesce(${sourceProducts.bestand}, 0) <= 0`);
   if (filters.customOnly) conditions.push(eq(sourceProducts.origin, "custom"));
   if (filters.shopifyOnly) conditions.push(isNotNull(sourceProducts.shopifyProductId));
   if (filters.shopifyChanged) {

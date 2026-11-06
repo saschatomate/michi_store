@@ -23,7 +23,7 @@ export default async function AvailabilityPage() {
       <p className="text-xs text-zinc-500">
         Ringgrößen: im Shop gibt es alle ganzen Größen von {RING_SIZE_MIN} bis {RING_SIZE_MAX}. Aus dem
         Lager-Einzelstück (Basisgröße) sind die Größen von Basisgröße −{RING_STOCK_DOWN} bis +{RING_STOCK_UP}
-        (z.B. Basis 48: 46–49) mit der Lieferzeit „Auf Lager“ lieferbar, alle anderen Größen werden auf
+        (z.B. Basis 48: 46–50) mit der Lieferzeit „Auf Lager“ lieferbar, alle anderen Größen werden auf
         Auftrag gefertigt.
       </p>
     </div>

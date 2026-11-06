@@ -99,11 +99,15 @@ const PRESERVE_ON_CONFLICT = new Set([
   "descriptionOverride",
 ]);
 
-function conflictUpdateSet() {
+// Überschrieben werden nur Spalten, die der Import tatsächlich aus der CSV liefert (Schlüssel des
+// Werteobjekts). Alles andere (Shopify-Status, Bild-/Sync-Stände, manuelle Felder, Steinherkunft ...)
+// bleibt unangetastet - sonst würde "excluded.<spalte>" es jede Nacht auf NULL/Default setzen.
+function conflictUpdateSet(csvKeys: string[]) {
   const columns = getTableColumns(sourceProducts);
+  const csv = new Set(csvKeys);
   const set: Record<string, ReturnType<typeof sql.raw>> = {};
   for (const [key, col] of Object.entries(columns)) {
-    if (PRESERVE_ON_CONFLICT.has(key)) continue;
+    if (PRESERVE_ON_CONFLICT.has(key) || !csv.has(key)) continue;
     set[key] = sql.raw(`excluded.${col.name}`);
   }
   return set;
@@ -259,7 +263,7 @@ export async function importCsvBuffer(
   let inserted = 0;
   let updated = 0;
   let errored = errors.length;
-  const conflictSet = conflictUpdateSet();
+  const conflictSet = conflictUpdateSet(parsedRows.length > 0 ? Object.keys(parsedRows[0].values) : []);
   const totalBatches = Math.ceil(parsedRows.length / BATCH_SIZE);
 
   for (let i = 0; i < parsedRows.length; i += BATCH_SIZE) {

@@ -157,7 +157,7 @@ export default async function ProductDetailPage({
         </div>
       </div>
 
-      {product.missingFromStockAt && (
+      {product.missingFromStockAt && !((product.bestand ?? 0) > 0) && (
         <div className="rounded-lg border-2 border-red-500 bg-red-50 px-4 py-3">
           <div className="text-sm font-bold uppercase tracking-wide text-red-700">
             ⚠ Achtung: nicht mehr bei Diamond Group verfügbar
