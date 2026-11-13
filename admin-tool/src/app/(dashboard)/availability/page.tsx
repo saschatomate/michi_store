@@ -21,10 +21,11 @@ export default async function AvailabilityPage() {
       </div>
       <AvailabilityRulesForm rules={rules} />
       <p className="text-xs text-zinc-500">
-        Ringgrößen: im Shop gibt es alle ganzen Größen von {RING_SIZE_MIN} bis {RING_SIZE_MAX}. Aus dem
-        Lager-Einzelstück (Basisgröße) sind die Größen von Basisgröße −{RING_STOCK_DOWN} bis +{RING_STOCK_UP}
-        (z.B. Basis 48: 46–50) mit der Lieferzeit „Auf Lager“ lieferbar, alle anderen Größen werden auf
-        Auftrag gefertigt.
+        Ringgrößen: im Shop gibt es die ganzen Größen {RING_SIZE_MIN} bis {RING_SIZE_MAX}. Bei Ringen, die als
+        „in der Größe änderbar“ markiert sind, sind aus dem Lager-Einzelstück die Größen von Basisgröße
+        −{RING_STOCK_DOWN} bis +{RING_STOCK_UP} (z.B. Basis 54: 52–56) mit der Lieferzeit „Auf Lager“
+        lieferbar, alle anderen Größen werden auf Auftrag gefertigt. Nicht änderbare Ringe (Pavé, Memoire)
+        gibt es nur in ihrer einen Größe.
       </p>
     </div>
   );

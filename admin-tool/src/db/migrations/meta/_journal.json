@@ -127,6 +127,20 @@
       "when": 1793991848969,
       "tag": "0017_lonely_proemial_gods",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794590026793,
+      "tag": "0018_green_monster_badoon",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794590069049,
+      "tag": "0019_charming_proteus",
+      "breakpoints": true
     }
   ]
 }

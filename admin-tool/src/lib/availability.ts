@@ -19,10 +19,11 @@ export const DEFAULT_RULES: AvailabilityRules = {
   shipping: { unit: "workdays", min: 1, max: 3 },
 };
 
-// Größenregel (angepasst 2026-11-02): im Shop gibt es alle ganzen Größen von 46 bis 60. Aus dem
-// Lager-Einzelstück (Basisgröße, z.B. 48) lassen sich die Größen von 2 kleiner bis 2 größer schnell
-// liefern (46-50, Lieferzeit "auf Lager"); alle übrigen Größen (51-60) werden auf Auftrag gefertigt.
-export const RING_SIZE_MIN = 46;
+// Größenregel (angepasst 2026-11-13): im Shop gibt es nur die ganzen Größen 48 bis 60. Bei Ringen, die als
+// "in der Größe änderbar" markiert sind, lassen sich aus dem Lager-Einzelstück (Basisgröße, z.B. 54) die
+// Größen 2 kleiner bis 2 größer schnell liefern (52-56); alle übrigen Größen werden auf Auftrag gefertigt.
+// Nicht änderbare Ringe (Pavé, Memoire) gibt es nur in der einen Größe.
+export const RING_SIZE_MIN = 48;
 export const RING_SIZE_MAX = 60;
 export const RING_STOCK_DOWN = 2;
 export const RING_STOCK_UP = 2;
@@ -76,17 +77,19 @@ export function parseRingSize(value: string | null | undefined): number | null {
 // erweitert. Bei Halbgrößen (z.B. 53,5) wird abgerundet.
 export function sellableRingSizes(baseSize: number): number[] {
   const base = Math.floor(baseSize);
-  const min = Math.min(RING_SIZE_MIN, base - RING_STOCK_DOWN);
-  const max = Math.max(RING_SIZE_MAX, base + RING_STOCK_UP);
+  const min = Math.min(RING_SIZE_MIN, base);
+  const max = Math.max(RING_SIZE_MAX, base);
   const sizes: number[] = [];
   for (let s = min; s <= max; s++) sizes.push(s);
   return sizes;
 }
 
-// Größen, die aus dem Lager-Einzelstück schnell lieferbar sind (Basisgröße -2 bis +1).
+// Größen, die aus dem Lager-Einzelstück schnell lieferbar sind (Basisgröße -2 bis +2, nur 48-60).
 export function stockRingSizes(baseSize: number): number[] {
   const base = Math.floor(baseSize);
-  return sellableRingSizes(baseSize).filter((s) => s >= base - RING_STOCK_DOWN && s <= base + RING_STOCK_UP);
+  return sellableRingSizes(baseSize).filter(
+    (s) => s >= base - RING_STOCK_DOWN && s <= base + RING_STOCK_UP && s >= RING_SIZE_MIN && s <= RING_SIZE_MAX,
+  );
 }
 
 const MISSING_WARNING_DAYS = 30;
@@ -101,6 +104,7 @@ export function deriveAvailability(
     | "hauptkategorie"
     | "ringgroesse"
     | "ringSizes"
+    | "ringResizable"
     | "missingFromStockAt"
   >,
   rules: AvailabilityRules,
@@ -155,8 +159,9 @@ export function deriveAvailability(
     } else {
       const base = parseRingSize(product.ringgroesse);
       if (base !== null) {
-        const fast = new Set(stockRingSizes(base));
-        variants = sellableRingSizes(base).map((size) => {
+        const fast = new Set(product.ringResizable ? stockRingSizes(base) : [Math.floor(base)]);
+        const sizes = product.ringResizable ? sellableRingSizes(base) : [Math.floor(base)];
+        variants = sizes.map((size) => {
           const mode = inStock && fast.has(size) ? "in_stock" : "made_to_order";
           return {
             size: String(size),

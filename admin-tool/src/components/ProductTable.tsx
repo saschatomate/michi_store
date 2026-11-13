@@ -6,7 +6,7 @@ import Image from "next/image";
 import { PackageSearch, Send, X, CheckCircle2, ImageOff } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Lightbox } from "@/components/Lightbox";
-import { sendSelectedToPipeline } from "@/lib/product-actions";
+import { sendSelectedToPipeline, type PipelineImageMode } from "@/lib/product-actions";
 import type { ProductStatus } from "@/db/schema";
 import { isRecent, SHOPIFY_ACTION_LABEL, type ShopifyAction } from "@/lib/shopify-changes";
 import { formatDateTime } from "@/lib/format";
@@ -47,6 +47,7 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [isPending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [imageMode, setImageMode] = useState<PipelineImageMode>("dg");
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const allOnPageSelected = products.length > 0 && products.every((p) => selected.has(p.id));
@@ -75,12 +76,18 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
   function sendToPipeline() {
     const ids = Array.from(selected);
     startTransition(async () => {
-      const result = await sendSelectedToPipeline(ids);
-      setFeedback(
-        result.bulk
-          ? `${result.sent} Artikel in Pipeline gesendet. Erstes DG-Bild ist freigegeben, keine KI-Texte - weitere Bilder pro Produkt ergänzbar.`
-          : `${result.sent} Artikel in Pipeline gesendet, Texte generiert.`,
-      );
+      try {
+        const result = await sendSelectedToPipeline(ids, imageMode);
+        const image =
+          result.imageMode === "dg"
+            ? "Erstes DG-Bild ist freigegeben."
+            : result.imageMode === "ai"
+              ? `KI-Produktbilder erzeugt (zur Freigabe im Produkt)${result.aiFailed.length ? `, fehlgeschlagen: ${result.aiFailed.join(", ")}` : ""}.`
+              : "Ohne Bild.";
+        setFeedback(`${result.sent} Artikel in Pipeline gesendet, keine KI-Texte. ${image}`);
+      } catch (err) {
+        setFeedback(err instanceof Error ? err.message : String(err));
+      }
       setSelected(new Set());
     });
   }
@@ -111,6 +118,16 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
               </span>
             )}
           </span>
+          <select
+            value={imageMode}
+            onChange={(e) => setImageMode(e.target.value as PipelineImageMode)}
+            disabled={isPending}
+            className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-700"
+          >
+            <option value="dg">Bild: erstes DG-Bild übernehmen</option>
+            <option value="ai">Bild: KI-Produktbild auf Hintergrund</option>
+            <option value="none">Ohne Bild</option>
+          </select>
           <button
             onClick={sendToPipeline}
             disabled={isPending || selected.size > MAX_BATCH_SIZE}

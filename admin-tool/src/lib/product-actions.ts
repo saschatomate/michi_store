@@ -7,6 +7,7 @@ import { sourceProducts, productCategories, STATUS_VALUES, type ProductStatus } 
 import { requireAuth } from "@/lib/dal";
 import { sendToPipelineWebhook } from "@/lib/pipeline-webhook";
 import { generateProductContent, type GeneratedContent } from "@/lib/text-generation";
+import { generateEnhancedShot } from "@/lib/enhanced-shot";
 import { adoptFirstDgImage } from "@/lib/dg-image-adopt";
 import { getMissingFields, FIELD_LABELS } from "@/lib/custom-product";
 
@@ -63,9 +64,16 @@ async function generateAndSave(product: typeof sourceProducts.$inferSelect): Pro
   }
 }
 
-export async function sendSelectedToPipeline(ids: number[]): Promise<{ sent: number; bulk: boolean }> {
+// Bildmodus beim Senden: "dg" = erstes DG-Bild direkt freigegeben, "ai" = KI-Produktbild (erstes DG-Bild auf
+// Hintergrund aus der Bibliothek, Freigabe manuell), "none" = ganz ohne Bild. Texte werden nie automatisch erzeugt.
+export type PipelineImageMode = "dg" | "ai" | "none";
+
+export async function sendSelectedToPipeline(
+  ids: number[],
+  imageMode: PipelineImageMode = "dg",
+): Promise<{ sent: number; imageMode: PipelineImageMode; aiFailed: string[] }> {
   await requireAuth();
-  if (ids.length === 0) return { sent: 0, bulk: false };
+  if (ids.length === 0) return { sent: 0, imageMode, aiFailed: [] };
   if (ids.length > MAX_PIPELINE_BATCH_SIZE) {
     throw new Error(`Maximal ${MAX_PIPELINE_BATCH_SIZE} Artikel gleichzeitig senden.`);
   }
@@ -99,21 +107,31 @@ export async function sendSelectedToPipeline(ids: number[]): Promise<{ sent: num
     rows.map((r) => sendToPipelineWebhook({ sourceProductId: r.id, modellErweitert: r.modellErweitert })),
   );
 
-  // Mehrfachauswahl: keine automatische Textgenerierung (Shop-Text kommt aus den Produktfakten) und
-  // nur das erste DG-Bild wird automatisch freigegeben - Einzelbearbeitung wäre sonst zu aufwendig.
-  // Einzelauswahl: wie bisher mit KI-Text. Einzelne Fehler landen in contentGenerationError statt
-  // den gesamten Batch abzubrechen.
-  const bulk = rows.length > 1;
-  if (bulk) {
+  // Keine automatische Textgenerierung mehr (Shop-Text kommt aus den Produktfakten, Texte lassen sich
+  // bei Bedarf einzeln im Produkt erzeugen). Bilder je nach Modus; Fehler einzelner KI-Bilder brechen
+  // den Batch nicht ab und landen im Bild-Slot als Fehlermeldung.
+  const aiFailed: string[] = [];
+  if (imageMode === "dg") {
     for (const r of rows) await adoptFirstDgImage(r);
-  } else {
-    await Promise.all(rows.map((r) => generateAndSave(r)));
+  } else if (imageMode === "ai") {
+    const queue = [...rows];
+    await Promise.all(
+      Array.from({ length: 3 }, async () => {
+        for (let r = queue.shift(); r; r = queue.shift()) {
+          try {
+            await generateEnhancedShot(r, null);
+          } catch {
+            aiFailed.push(r.modellErweitert);
+          }
+        }
+      }),
+    );
   }
 
   revalidatePath("/");
   revalidatePath("/mapping");
   revalidatePath("/", "layout");
-  return { sent: rows.length, bulk };
+  return { sent: rows.length, imageMode, aiFailed };
 }
 
 export async function updateProductStatus(id: number, status: ProductStatus): Promise<void> {

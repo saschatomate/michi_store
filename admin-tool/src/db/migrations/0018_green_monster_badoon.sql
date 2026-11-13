@@ -1,0 +1,1 @@
+ALTER TABLE "source_products" ADD COLUMN "ring_resizable" boolean DEFAULT false NOT NULL;

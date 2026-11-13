@@ -3,7 +3,7 @@ import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { ArrowLeft, BadgeCheck, Box, Clock, Gem, History, Pencil, Sparkles, Wallet } from "lucide-react";
 import { db } from "@/db/client";
-import { sourceProducts, productGeneratedImages, productAuditLog, productCategories } from "@/db/schema";
+import { sourceProducts, productGeneratedImages, productAuditLog, productCategories, imageBackgrounds } from "@/db/schema";
 import { StatusSelect } from "@/components/StatusSelect";
 import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { GeneratedContentSection } from "@/components/GeneratedContentSection";
@@ -23,6 +23,8 @@ import { buttonSecondary } from "@/lib/ui";
 import { deriveAvailability } from "@/lib/availability";
 import { loadAvailabilityRules } from "@/lib/availability-rules";
 import { DiscontinuedToggle } from "@/components/DiscontinuedToggle";
+import { EnhancedShotButton } from "@/components/EnhancedShotButton";
+import { RingResizableToggle } from "@/components/RingResizableToggle";
 import { ShopifyPublishSection } from "@/components/ShopifyPublishSection";
 import { shopifyAdminProductUrl } from "@/lib/shopify-client";
 import { categoryIntroFor, isShopifyOutOfSync } from "@/lib/shopify-sync";
@@ -259,6 +261,11 @@ export default async function ProductDetailPage({
               <p className="mt-1.5 text-[11px] text-zinc-400">Grün = Lagerware, grau = Anfertigung.</p>
             </div>
           )}
+          {product.hauptkategorie === "Ring" && product.origin !== "custom" && (
+            <div className="mt-3">
+              <RingResizableToggle id={product.id} resizable={product.ringResizable} />
+            </div>
+          )}
           <div className="mt-3">
             <DiscontinuedToggle id={product.id} discontinued={product.discontinued} />
           </div>
@@ -476,6 +483,11 @@ export default async function ProductDetailPage({
           seoTitle: product.genSeoTitle ?? "",
           seoDescription: product.genSeoDescription ?? "",
         }}
+      />
+
+      <EnhancedShotButton
+        id={product.id}
+        backgrounds={await db.select({ id: imageBackgrounds.id, name: imageBackgrounds.name }).from(imageBackgrounds)}
       />
 
       <GeneratedImagesSection

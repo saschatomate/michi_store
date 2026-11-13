@@ -41,3 +41,23 @@ export async function setProductDiscontinued(id: number, discontinued: boolean):
   revalidatePath("/");
   revalidatePath(`/products/${id}`);
 }
+
+// Schalter "Ring in der Größe änderbar": bestimmt, ob die Nachbargrößen (±2) als Lagerware angeboten werden.
+export async function setRingResizable(id: number, resizable: boolean): Promise<void> {
+  await requireAuth();
+  const product = await db.query.sourceProducts.findFirst({
+    where: eq(sourceProducts.id, id),
+    columns: { ringResizable: true },
+  });
+  if (!product) throw new Error("Produkt nicht gefunden.");
+  if (product.ringResizable === resizable) return;
+
+  await db.update(sourceProducts).set({ ringResizable: resizable, updatedAt: new Date() }).where(eq(sourceProducts.id, id));
+  await db.insert(productAuditLog).values({
+    sourceProductId: id,
+    action: "updated",
+    changes: { ringResizable: { from: product.ringResizable, to: resizable } },
+  });
+  revalidatePath("/");
+  revalidatePath(`/products/${id}`);
+}

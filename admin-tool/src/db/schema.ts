@@ -195,6 +195,9 @@ export const sourceProducts = pgTable(
     descriptionOverride: text("description_override"),
     designFamilyId: text("design_family_id"),
     ringSizes: jsonb("ring_sizes").$type<string[]>(),
+    // Ring in der Größe änderbar (Lagerstück lässt sich ±2 Größen anpassen). Nur dann werden die Nachbargrößen
+    // als Lagerware angeboten; Pavé/Memoire o.ä. bleiben bei der einen Größe. Kommt nie aus der CSV.
+    ringResizable: boolean("ring_resizable").notNull().default(false),
     customImages: jsonb("custom_images").$type<CustomImage[]>(),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -251,7 +254,7 @@ export const productGeneratedImages = pgTable(
 export const API_USAGE_PROVIDER_VALUES = ["anthropic", "openai"] as const;
 export type ApiUsageProvider = (typeof API_USAGE_PROVIDER_VALUES)[number];
 
-export const API_USAGE_PURPOSE_VALUES = ["text_generation", "image_generation"] as const;
+export const API_USAGE_PURPOSE_VALUES = ["text_generation", "image_generation", "background_selection"] as const;
 export type ApiUsagePurpose = (typeof API_USAGE_PURPOSE_VALUES)[number];
 
 // Kosten-Tracking für die Budget-Anzeige im Admin: ein Eintrag pro tatsächlichem API-Aufruf an
@@ -375,4 +378,18 @@ export const availabilityRules = pgTable("availability_rules", {
   minValue: integer("min_value").notNull(),
   maxValue: integer("max_value").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Hintergrund-Bibliothek für das KI-Produktbild: Referenzfoto + Beschreibung, wofür der Hintergrund passt.
+// Die KI wählt pro Produkt anhand von Beschreibung/Kategorien den passenden Hintergrund (background-actions.ts).
+export const imageBackgrounds = pgTable("image_backgrounds", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  // Freitext für die automatische Auswahl, z.B. "Dunkel, für Weißgold und große Steine".
+  description: text("description"),
+  // Optional: Hauptkategorien, für die der Hintergrund bevorzugt wird (leer = für alles).
+  categories: jsonb("categories").$type<string[]>().notNull().default([]),
+  imageUrl: text("image_url").notNull(),
+  storagePath: text("storage_path").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

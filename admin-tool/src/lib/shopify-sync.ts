@@ -158,7 +158,7 @@ export function buildProductSetInput(args: {
         inventoryPolicy: "CONTINUE",
         inventoryItem: { sku: `${product.modellErweitert}-${v.size}`, tracked: true, requiresShipping: true },
         metafields: variantMeta(v.mode, v.label),
-        ...quantities(v.isBaseSize ? stock : 0),
+        ...quantities(v.mode === "in_stock" ? stock : 0),
       }))
     : [
         {
@@ -487,8 +487,9 @@ export async function resyncStockLevels(limit = 200): Promise<ResyncSummary> {
       const availability = deriveAvailability(product, rules);
       const quantities = new Map<string, number>();
       if (availability.variants.length > 0) {
-        const base = availability.variants.find((v) => v.isBaseSize);
-        if (base) quantities.set(`${product.modellErweitert}-${base.size}`, stock);
+        for (const v of availability.variants) {
+          if (v.mode === "in_stock" || v.isBaseSize) quantities.set(`${product.modellErweitert}-${v.size}`, stock);
+        }
       } else {
         quantities.set(product.modellErweitert, stock);
       }
