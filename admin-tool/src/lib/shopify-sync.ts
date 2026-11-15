@@ -15,7 +15,7 @@
 //   damit durch Bestellungen entstandene Minusbestände (= offene Anfertigungen) erhalten bleiben.
 import { deriveFilterFacets } from "@/lib/filter-facets";
 import { createHash } from "node:crypto";
-import { and, asc, eq, isNotNull, inArray, or } from "drizzle-orm";
+import { and, asc, eq, isNotNull } from "drizzle-orm";
 import { db } from "@/db/client";
 import { categories, productAuditLog, productCategories, productGeneratedImages, sourceProducts } from "@/db/schema";
 import {

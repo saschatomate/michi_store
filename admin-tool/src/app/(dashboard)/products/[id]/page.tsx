@@ -23,6 +23,7 @@ import { buttonSecondary } from "@/lib/ui";
 import { deriveAvailability } from "@/lib/availability";
 import { loadAvailabilityRules } from "@/lib/availability-rules";
 import { DiscontinuedToggle } from "@/components/DiscontinuedToggle";
+import { activeJobForProduct } from "@/lib/image-jobs";
 import { EnhancedShotButton } from "@/components/EnhancedShotButton";
 import { deriveFilterFacets } from "@/lib/filter-facets";
 import { RingResizableToggle } from "@/components/RingResizableToggle";
@@ -55,6 +56,9 @@ function SectionHeader({ icon: Icon, title }: { icon: React.ComponentType<{ size
 }
 
 const subTh = "py-1.5 pr-3 font-medium";
+
+// Hintergrund-Aufträge (KI-Produktbilder) laufen im Rahmen dieser Seite weiter - Zeitlimit hochsetzen.
+export const maxDuration = 300;
 
 export default async function ProductDetailPage({
   params,
@@ -511,6 +515,7 @@ export default async function ProductDetailPage({
 
       <EnhancedShotButton
         id={product.id}
+        running={(await activeJobForProduct(product.id)) !== null}
         backgrounds={await db.select({ id: imageBackgrounds.id, name: imageBackgrounds.name }).from(imageBackgrounds)}
       />
 

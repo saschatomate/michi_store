@@ -141,6 +141,13 @@
       "when": 1794590069049,
       "tag": "0019_charming_proteus",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794765387661,
+      "tag": "0020_long_scarlet_witch",
+      "breakpoints": true
     }
   ]
 }

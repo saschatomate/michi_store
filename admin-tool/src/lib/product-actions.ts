@@ -7,7 +7,7 @@ import { sourceProducts, productCategories, STATUS_VALUES, type ProductStatus } 
 import { requireAuth } from "@/lib/dal";
 import { sendToPipelineWebhook } from "@/lib/pipeline-webhook";
 import { generateProductContent, type GeneratedContent } from "@/lib/text-generation";
-import { generateEnhancedShot } from "@/lib/enhanced-shot";
+import { enqueueEnhancedShots } from "@/lib/image-jobs";
 import { adoptFirstDgImage } from "@/lib/dg-image-adopt";
 import { getMissingFields, FIELD_LABELS } from "@/lib/custom-product";
 
@@ -71,9 +71,9 @@ export type PipelineImageMode = "dg" | "ai" | "none";
 export async function sendSelectedToPipeline(
   ids: number[],
   imageMode: PipelineImageMode = "dg",
-): Promise<{ sent: number; imageMode: PipelineImageMode; aiFailed: string[] }> {
+): Promise<{ sent: number; imageMode: PipelineImageMode }> {
   await requireAuth();
-  if (ids.length === 0) return { sent: 0, imageMode, aiFailed: [] };
+  if (ids.length === 0) return { sent: 0, imageMode };
   if (ids.length > MAX_PIPELINE_BATCH_SIZE) {
     throw new Error(`Maximal ${MAX_PIPELINE_BATCH_SIZE} Artikel gleichzeitig senden.`);
   }
@@ -108,30 +108,18 @@ export async function sendSelectedToPipeline(
   );
 
   // Keine automatische Textgenerierung mehr (Shop-Text kommt aus den Produktfakten, Texte lassen sich
-  // bei Bedarf einzeln im Produkt erzeugen). Bilder je nach Modus; Fehler einzelner KI-Bilder brechen
-  // den Batch nicht ab und landen im Bild-Slot als Fehlermeldung.
-  const aiFailed: string[] = [];
+  // bei Bedarf einzeln im Produkt erzeugen). Bilder je nach Modus; KI-Bilder laufen als Hintergrund-Aufträge.
   if (imageMode === "dg") {
     for (const r of rows) await adoptFirstDgImage(r);
   } else if (imageMode === "ai") {
-    const queue = [...rows];
-    await Promise.all(
-      Array.from({ length: 3 }, async () => {
-        for (let r = queue.shift(); r; r = queue.shift()) {
-          try {
-            await generateEnhancedShot(r, null);
-          } catch {
-            aiFailed.push(r.modellErweitert);
-          }
-        }
-      }),
-    );
+    // Läuft im Hintergrund weiter (image-jobs.ts); fertige Bilder erscheinen von selbst.
+    await enqueueEnhancedShots(rows.map((r) => r.id), null);
   }
 
   revalidatePath("/");
   revalidatePath("/mapping");
   revalidatePath("/", "layout");
-  return { sent: rows.length, imageMode, aiFailed };
+  return { sent: rows.length, imageMode };
 }
 
 export async function updateProductStatus(id: number, status: ProductStatus): Promise<void> {

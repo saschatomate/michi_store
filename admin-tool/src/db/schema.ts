@@ -393,3 +393,26 @@ export const imageBackgrounds = pgTable("image_backgrounds", {
   storagePath: text("storage_path").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Hintergrund-Aufträge für KI-Produktbilder: der Klick legt nur den Auftrag an, die Generierung läuft
+// serverseitig weiter (next/server after), auch wenn der Browser-Tab geschlossen wird.
+export const IMAGE_JOB_STATUS_VALUES = ["queued", "running", "done", "failed"] as const;
+export type ImageJobStatus = (typeof IMAGE_JOB_STATUS_VALUES)[number];
+
+export const imageJobs = pgTable(
+  "image_jobs",
+  {
+    id: serial("id").primaryKey(),
+    sourceProductId: integer("source_product_id")
+      .notNull()
+      .references(() => sourceProducts.id),
+    // null = KI wählt den Hintergrund
+    backgroundId: integer("background_id"),
+    status: text("status").$type<ImageJobStatus>().notNull().default("queued"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (table) => [index("image_jobs_status_idx").on(table.status), index("image_jobs_product_idx").on(table.sourceProductId)],
+);

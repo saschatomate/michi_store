@@ -12,6 +12,9 @@ import { inArray } from "drizzle-orm";
 
 type SearchParams = { [key: string]: string | string[] | undefined };
 
+// Sammelversand mit KI-Bildern startet Hintergrund-Aufträge, die im Rahmen dieser Seite weiterlaufen.
+export const maxDuration = 300;
+
 export default async function ProductListPage({
   searchParams,
 }: {

@@ -83,7 +83,7 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
           result.imageMode === "dg"
             ? "Erstes DG-Bild ist freigegeben."
             : result.imageMode === "ai"
-              ? `KI-Produktbilder erzeugt (zur Freigabe im Produkt)${result.aiFailed.length ? `, fehlgeschlagen: ${result.aiFailed.join(", ")}` : ""}.`
+              ? "KI-Produktbilder werden im Hintergrund erzeugt und erscheinen von selbst (zur Freigabe im Produkt)."
               : "Ohne Bild.";
         setFeedback(`${result.sent} Artikel in Pipeline gesendet, keine KI-Texte. ${image}`);
       } catch (err) {
@@ -113,8 +113,7 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
         <div className="py-2 empty:hidden">
           <BusyNote
             active={isPending}
-            label={imageMode === "ai" ? "KI-Produktbilder werden erzeugt" : "Artikel werden in die Pipeline gesendet"}
-            hint={imageMode === "ai" ? "Pro Artikel etwa 1–2 Minuten, mehrere laufen parallel. Bitte die Seite offen lassen." : undefined}
+            label="Artikel werden in die Pipeline gesendet"
           />
         </div>
       </div>

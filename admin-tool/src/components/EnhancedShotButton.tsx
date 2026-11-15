@@ -7,7 +7,7 @@ import { BusyNote, Spinner } from "@/components/Busy";
 import { generateEnhancedShotForProduct } from "@/lib/background-actions";
 import { buttonSecondary, cardClass, selectClass } from "@/lib/ui";
 
-export function EnhancedShotButton({ id, backgrounds }: { id: number; backgrounds: { id: number; name: string }[] }) {
+export function EnhancedShotButton({ id, backgrounds, running }: { id: number; backgrounds: { id: number; name: string }[]; running: boolean }) {
   const router = useRouter();
   const [choice, setChoice] = useState("auto");
   const [info, setInfo] = useState<string | null>(null);
@@ -20,7 +20,7 @@ export function EnhancedShotButton({ id, backgrounds }: { id: number; background
     startTransition(async () => {
       try {
         const r = await generateEnhancedShotForProduct(id, choice === "auto" ? null : Number(choice));
-        setInfo(`Bild 1 erzeugt auf „${r.backgroundName}“ – bitte prüfen und freigeben.`);
+        setInfo(r.queued ? "Auftrag gestartet - das Bild erscheint von selbst, du kannst die Seite verlassen." : "Für dieses Produkt läuft bereits ein Auftrag.");
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -41,16 +41,16 @@ export function EnhancedShotButton({ id, backgrounds }: { id: number; background
         {error && <p className="fade-in mt-1 text-xs text-red-600">{error}</p>}
       </div>
       <div className="w-full empty:hidden">
-        <BusyNote active={isPending} label="KI-Produktbild wird erzeugt" hint="Dauert meist 1–2 Minuten. Bitte die Seite offen lassen." />
+        <BusyNote active={isPending || running} label="KI-Produktbild wird erzeugt" hint="Dauert meist 1–2 Minuten. Du kannst die Seite verlassen - das Bild erscheint von selbst." />
       </div>
-      <select className={selectClass} value={choice} onChange={(e) => setChoice(e.target.value)} disabled={isPending}>
+      <select className={selectClass} value={choice} onChange={(e) => setChoice(e.target.value)} disabled={isPending || running}>
         <option value="auto">Hintergrund automatisch wählen</option>
         {backgrounds.map((b) => (
           <option key={b.id} value={b.id}>{b.name}</option>
         ))}
       </select>
-      <button className={buttonSecondary} onClick={run} disabled={isPending || backgrounds.length === 0}>
-        {isPending ? <Spinner /> : <Sparkles size={14} />} {isPending ? "Erzeuge …" : "Erzeugen"}
+      <button className={buttonSecondary} onClick={run} disabled={isPending || running || backgrounds.length === 0}>
+        {isPending || running ? <Spinner /> : <Sparkles size={14} />} {isPending || running ? "Läuft …" : "Erzeugen"}
       </button>
     </section>
   );

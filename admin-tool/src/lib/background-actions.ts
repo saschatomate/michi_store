@@ -7,7 +7,7 @@ import { db } from "@/db/client";
 import { imageBackgrounds, sourceProducts } from "@/db/schema";
 import { requireAuth } from "@/lib/dal";
 import { createSignedImageUpload, deleteGeneratedImage, publicImageUrl } from "@/lib/image-storage";
-import { generateEnhancedShot } from "@/lib/enhanced-shot";
+import { enqueueEnhancedShots } from "@/lib/image-jobs";
 
 const UPLOAD_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 
@@ -63,16 +63,19 @@ export async function deleteBackground(id: number): Promise<void> {
   revalidatePath("/backgrounds");
 }
 
-// Einzelprodukt: KI-Produktbild (erstes DG-Foto + Hintergrund) in Slot 1. backgroundId null = KI wählt.
+// Einzelprodukt: legt einen Hintergrund-Auftrag an und kehrt sofort zurück - das Bild entsteht serverseitig
+// weiter, auch wenn der Tab geschlossen wird. backgroundId null = KI wählt.
 export async function generateEnhancedShotForProduct(
   productId: number,
   backgroundId: number | null,
-): Promise<{ backgroundName: string }> {
+): Promise<{ queued: boolean }> {
   await requireAuth();
-  const product = await db.query.sourceProducts.findFirst({ where: eq(sourceProducts.id, productId) });
+  const product = await db.query.sourceProducts.findFirst({
+    where: eq(sourceProducts.id, productId),
+    columns: { id: true },
+  });
   if (!product) throw new Error("Artikel nicht gefunden.");
-  const result = await generateEnhancedShot(product, backgroundId);
+  const queued = (await enqueueEnhancedShots([productId], backgroundId)) > 0;
   revalidatePath(`/products/${productId}`);
-  revalidatePath("/", "layout");
-  return result;
+  return { queued };
 }
