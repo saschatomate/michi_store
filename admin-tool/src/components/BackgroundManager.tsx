@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { BusyNote, Spinner } from "@/components/Busy";
 import { ImagePlus, Trash2, Upload } from "lucide-react";
 import {
   createBackgroundUploadUrl,
@@ -38,7 +39,7 @@ function Row({ item }: { item: Item }) {
   }
 
   return (
-    <div className={`${cardClass} flex gap-4 p-3`}>
+    <div className={`${cardClass} fade-in flex gap-4 p-3 transition-shadow hover:shadow-md ${isPending ? "opacity-60" : ""}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={item.imageUrl} alt={item.name} className="h-28 w-28 shrink-0 rounded-lg object-cover" />
       <div className="min-w-0 flex-1 space-y-2">
@@ -63,7 +64,7 @@ function Row({ item }: { item: Item }) {
               disabled={isPending}
               onClick={() => run(() => updateBackground(item.id, { name, description, categories: parseCategories(categories) }))}
             >
-              Speichern
+              {isPending ? <Spinner /> : null} Speichern
             </button>
           )}
           <button
@@ -133,9 +134,10 @@ export function BackgroundManager({ backgrounds }: { backgrounds: Item[] }) {
         <textarea className={inputClass} rows={2} placeholder="Wofür passt er? (Hilfe für die automatische Auswahl)" value={description} onChange={(e) => setDescription(e.target.value)} />
         <input className={inputClass} placeholder="Bevorzugte Kategorien, kommagetrennt (optional)" value={categories} onChange={(e) => setCategories(e.target.value)} />
         <button className={buttonPrimary} disabled={isPending} onClick={add}>
-          <Upload size={14} /> {isPending ? "Lädt …" : "Hinzufügen"}
+          {isPending ? <Spinner /> : <Upload size={14} />} {isPending ? "Lädt hoch …" : "Hinzufügen"}
         </button>
-        {error && <p className="text-xs text-red-600">{error}</p>}
+        <BusyNote active={isPending} label="Hintergrund wird hochgeladen" />
+        {error && <p className="fade-in text-xs text-red-600">{error}</p>}
       </div>
       {backgrounds.length === 0 && <p className="text-sm text-zinc-500">Noch keine Hintergründe angelegt.</p>}
       {backgrounds.map((b) => (

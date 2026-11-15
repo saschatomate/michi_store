@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { PackageSearch, Send, X, CheckCircle2, ImageOff } from "lucide-react";
+import { BusyNote, Spinner } from "@/components/Busy";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Lightbox } from "@/components/Lightbox";
 import { sendSelectedToPipeline, type PipelineImageMode } from "@/lib/product-actions";
@@ -95,7 +96,7 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm">
       {feedback && selected.size === 0 && (
-        <div className="flex items-center justify-between border-b border-emerald-100 bg-emerald-50 px-4 py-2.5">
+        <div className="fade-in flex items-center justify-between border-b border-emerald-100 bg-emerald-50 px-4 py-2.5">
           <span className="flex items-center gap-2 text-sm text-emerald-800">
             <CheckCircle2 size={15} />
             {feedback}
@@ -108,6 +109,15 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
           </button>
         </div>
       )}
+      <div className="px-4 empty:hidden">
+        <div className="py-2 empty:hidden">
+          <BusyNote
+            active={isPending}
+            label={imageMode === "ai" ? "KI-Produktbilder werden erzeugt" : "Artikel werden in die Pipeline gesendet"}
+            hint={imageMode === "ai" ? "Pro Artikel etwa 1–2 Minuten, mehrere laufen parallel. Bitte die Seite offen lassen." : undefined}
+          />
+        </div>
+      </div>
       {selected.size > 0 && (
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-indigo-100 bg-indigo-50 px-4 py-2.5">
           <span className="text-sm font-medium text-indigo-900">
@@ -133,7 +143,7 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
             disabled={isPending || selected.size > MAX_BATCH_SIZE}
             className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Send size={14} />
+            {isPending ? <Spinner /> : <Send size={14} />}
             {isPending ? "Sende…" : "In Pipeline senden"}
           </button>
         </div>

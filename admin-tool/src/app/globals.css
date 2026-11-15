@@ -45,3 +45,38 @@ body {
   scrollbar-width: thin;
   scrollbar-color: var(--color-zinc-300) transparent;
 }
+
+/* ---- Bewegung & Rückmeldung (global) ---- */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.page-enter { animation: fade-in-up 0.28s ease-out both; }
+.fade-in { animation: fade-in 0.25s ease-out both; }
+.skeleton {
+  background: linear-gradient(90deg, #ececf0 25%, #f7f7f9 50%, #ececf0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+/* Alle Knöpfe: weiche Übergänge und spürbarer Klick */
+button, [role="button"], select, a { transition-property: background-color, border-color, color, box-shadow, transform, opacity; transition-duration: 150ms; }
+button:not(:disabled):active { transform: scale(0.97); }
+button:disabled { cursor: not-allowed; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}

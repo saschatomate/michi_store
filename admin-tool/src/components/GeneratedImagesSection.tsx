@@ -17,6 +17,7 @@ import {
   type GenerationMethod,
 } from "@/lib/image-actions";
 import { buttonPrimary, buttonSecondary, buttonGhost, cardClass, inputClass } from "@/lib/ui";
+import { BusyNote } from "@/components/Busy";
 import { Lightbox } from "@/components/Lightbox";
 import { formatUsd } from "@/lib/format";
 import type { GeneratedImageStatus } from "@/db/schema";
@@ -618,6 +619,9 @@ export function GeneratedImagesSection({
 
   return (
     <section className={`${cardClass} p-4`}>
+      <div className="mb-3 empty:hidden">
+        <BusyNote active={isPending} label="Bilder werden erzeugt" hint="Das kann bis zu einigen Minuten dauern. Bitte die Seite offen lassen." />
+      </div>
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-zinc-900">
           <ImageIcon size={15} />

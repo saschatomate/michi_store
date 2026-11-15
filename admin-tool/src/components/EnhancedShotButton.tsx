@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
+import { BusyNote, Spinner } from "@/components/Busy";
 import { generateEnhancedShotForProduct } from "@/lib/background-actions";
 import { buttonSecondary, cardClass, selectClass } from "@/lib/ui";
 
@@ -36,8 +37,11 @@ export function EnhancedShotButton({ id, backgrounds }: { id: number; background
           Erstes DG-Bild auf einem Hintergrund aus der Bibliothek, veredelt (Auflösung, Licht, Kratzer). Ersetzt Bild 1,
           sofern es nicht freigegeben ist.
         </p>
-        {info && <p className="mt-1 text-xs text-emerald-700">{info}</p>}
-        {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+        {info && <p className="fade-in mt-1 text-xs text-emerald-700">{info}</p>}
+        {error && <p className="fade-in mt-1 text-xs text-red-600">{error}</p>}
+      </div>
+      <div className="w-full empty:hidden">
+        <BusyNote active={isPending} label="KI-Produktbild wird erzeugt" hint="Dauert meist 1–2 Minuten. Bitte die Seite offen lassen." />
       </div>
       <select className={selectClass} value={choice} onChange={(e) => setChoice(e.target.value)} disabled={isPending}>
         <option value="auto">Hintergrund automatisch wählen</option>
@@ -46,7 +50,7 @@ export function EnhancedShotButton({ id, backgrounds }: { id: number; background
         ))}
       </select>
       <button className={buttonSecondary} onClick={run} disabled={isPending || backgrounds.length === 0}>
-        <Sparkles size={14} /> {isPending ? "Erzeuge …" : "Erzeugen"}
+        {isPending ? <Spinner /> : <Sparkles size={14} />} {isPending ? "Erzeuge …" : "Erzeugen"}
       </button>
     </section>
   );
