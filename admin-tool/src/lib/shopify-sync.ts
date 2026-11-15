@@ -179,6 +179,7 @@ export function buildProductSetInput(args: {
     product.legierung,
     product.stoneOrigin ? (product.stoneOrigin === "lab_grown" ? "labordiamant" : "naturdiamant") : null,
     availability.mode === "made_to_order" ? "made-to-order" : null,
+    deriveFilterFacets(product).engagementRing ? "verlobungsring" : null,
     options.isTest ? "claude-test" : null,
   ].filter((t): t is string => Boolean(t));
 
@@ -205,6 +206,7 @@ export function buildProductSetInput(args: {
     ...metafield("alloy", "single_line_text_field", facets.alloy),
     ...metafield("stone_cut", "single_line_text_field", facets.cutShape),
     ...metafield("carat_group", "single_line_text_field", facets.caratGroup),
+    ...metafield("ring_type", "single_line_text_field", facets.ringType),
   ];
 
   return {

@@ -86,18 +86,20 @@ export async function pickBackgroundForProduct(
   return backgrounds.find((b) => b.id === id) ?? backgrounds[0];
 }
 
-function buildPrompt(background: BackgroundRow): string {
+// Prompt von Sascha (2026-11-15). Der Hintergrund ist nicht mehr fest "dunkler Marmor", sondern der
+// jeweils gewählte aus der Bibliothek (Bild 2).
+function buildPrompt(): string {
   return (
-    `Kontext: professionelle E-Commerce-Produktfotografie für eine Fine-Jewellery-Marke. Bild 1 ist das Produktfoto ` +
-    `des Schmuckstücks, Bild 2 ist der Hintergrund ("${background.name}"). Setze das Schmuckstück aus Bild 1 ruhig und ` +
-    `natürlich auf den Untergrund bzw. in die Szene aus Bild 2 (Material, Farbe und Lichtstimmung des Hintergrunds ` +
-    `beibehalten). Das Schmuckstück muss EXAKT dem Produktfoto entsprechen: gleiche Form, Proportionen, Anzahl und ` +
-    `Anordnung aller Steine und Elemente, gleiche Metall- und Steinfarben - nichts hinzufügen, weglassen oder ` +
-    `umgestalten. Falls das Produktfoto Person oder Hand zeigt, übernimm nur das Schmuckstück. ` +
-    `Veredle das Schmuckstück: hochwertige, brillante Darstellung, kleine Kratzer, Staub und Abdrücke entfernen, ` +
-    `professionelles weiches Studiolicht, realistische Kontaktschatten und feine Reflexionen, scharfe Details an ` +
-    `Metall und Steinen, hohe Auflösung. Das Schmuckstück ist das einzige Objekt, vollständig sichtbar und zentriert ` +
-    `mit Abstand zum Rand, kein Text, keine Logos, keine weiteren Schmuckstücke.`
+    `Bild 1 ist das Schmuckfoto, Bild 2 ist das Hintergrundbild. ` +
+    `Verwende das Hintergrundbild und das Schmuckfoto, um eine hochwertige, fotorealistische Produktaufnahme zu erstellen. ` +
+    `Platziere die Schmuckstücke elegant auf dem Hintergrund aus Bild 2 und bewahre ihre ursprüngliche Form, ` +
+    `Proportionen, Farbe, Gravuren und sämtliche Designdetails exakt – ohne Verzerrungen oder hinzugefügte Elemente. ` +
+    `Entferne Staub, Fingerabdrücke und oberflächliche Kratzer behutsam, ohne Materialstruktur oder Details zu verändern. ` +
+    `Stimme Perspektive, Größe und Ausrichtung natürlich auf den Hintergrund ab. ` +
+    `Setze weiches Studiolicht, realistische Kontaktschatten und dezente Reflexionen ein, damit der Schmuck glaubwürdig ` +
+    `auf dem Hintergrund aus Bild 2 liegt. Edelsteine und Metall sollen klar, natürlich und hochwertig wirken, ohne übertriebene ` +
+    `Glanz- oder Funkel-Effekte. Der Schmuck steht im Mittelpunkt und ist gestochen scharf. ` +
+    `Keine zusätzlichen Schmuckstücke, keine Dekoration, keine Schrift und keine Logos.`
   );
 }
 
@@ -125,7 +127,7 @@ export async function generateEnhancedShot(
   if (existing?.status === "approved") return { backgroundName: background.name };
 
   const [src, bg] = await Promise.all([fetchImageBuffer(sourceUrl), fetchImageBuffer(background.imageUrl)]);
-  const prompt = buildPrompt(background);
+  const prompt = buildPrompt();
   const label = `${ENHANCED_SHOT_LABEL} – ${background.name}`;
 
   try {

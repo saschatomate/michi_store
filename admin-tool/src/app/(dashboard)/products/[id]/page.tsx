@@ -269,6 +269,7 @@ export default async function ProductDetailPage({
               ["Legierung", f.alloy],
               ["Schliffform", f.cutShape],
               ["Karatgruppe", f.caratGroup],
+              ...(product.hauptkategorie === "Ring" ? ([["Ringtyp", f.ringType ? `${f.ringType}${f.engagementRing ? " (Verlobungsring)" : ""}` : null]] as [string, string | null][]) : []),
             ];
             return (
               <div className="mt-3">
