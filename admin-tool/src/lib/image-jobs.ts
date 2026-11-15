@@ -68,12 +68,13 @@ async function runJob(jobId: number): Promise<void> {
 
 export async function imageJobCounts(): Promise<{ active: number; recentDone: number; recentFailed: number }> {
   await failStaleJobs();
-  const since = new Date(Date.now() - 10 * 60_000);
+  // Als ISO-String übergeben: ein Date-Objekt direkt in einem sql-Template lehnt der DB-Treiber ab.
+  const since = new Date(Date.now() - 10 * 60_000).toISOString();
   const rows = await db
     .select({
       active: sql<number>`count(*) filter (where ${imageJobs.status} in ('queued','running'))::int`,
-      recentDone: sql<number>`count(*) filter (where ${imageJobs.status} = 'done' and ${imageJobs.finishedAt} > ${since})::int`,
-      recentFailed: sql<number>`count(*) filter (where ${imageJobs.status} = 'failed' and ${imageJobs.finishedAt} > ${since})::int`,
+      recentDone: sql<number>`count(*) filter (where ${imageJobs.status} = 'done' and ${imageJobs.finishedAt} > ${since}::timestamptz)::int`,
+      recentFailed: sql<number>`count(*) filter (where ${imageJobs.status} = 'failed' and ${imageJobs.finishedAt} > ${since}::timestamptz)::int`,
     })
     .from(imageJobs);
   return rows[0];
