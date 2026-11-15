@@ -6,6 +6,7 @@ import { db } from "@/db/client";
 import { imageBackgrounds, productGeneratedImages, type sourceProducts } from "@/db/schema";
 import { fetchImageBuffer, guessMimeType } from "@/lib/image-generation";
 import { estimateClaudeTextCost, estimateOpenAiImageCost, recordApiUsage } from "@/lib/cost-tracking";
+import { distancePrompt } from "@/lib/shot-distance";
 import { signGeneratedImage } from "@/lib/c2pa-sign";
 import { uploadGeneratedImage, deleteGeneratedImage } from "@/lib/image-storage";
 
@@ -88,7 +89,7 @@ export async function pickBackgroundForProduct(
 
 // Prompt von Sascha (2026-11-15). Der Hintergrund ist nicht mehr fest "dunkler Marmor", sondern der
 // jeweils gewählte aus der Bibliothek (Bild 2).
-function buildPrompt(): string {
+function buildPrompt(distance: string | null): string {
   return (
     `Bild 1 ist das Schmuckfoto, Bild 2 ist das Hintergrundbild. ` +
     `Verwende das Hintergrundbild und das Schmuckfoto, um eine hochwertige, fotorealistische Produktaufnahme zu erstellen. ` +
@@ -99,7 +100,8 @@ function buildPrompt(): string {
     `Setze weiches Studiolicht, realistische Kontaktschatten und dezente Reflexionen ein, damit der Schmuck glaubwürdig ` +
     `auf dem Hintergrund aus Bild 2 liegt. Edelsteine und Metall sollen klar, natürlich und hochwertig wirken, ohne übertriebene ` +
     `Glanz- oder Funkel-Effekte. Der Schmuck steht im Mittelpunkt und ist gestochen scharf. ` +
-    `Keine zusätzlichen Schmuckstücke, keine Dekoration, keine Schrift und keine Logos.`
+    `Keine zusätzlichen Schmuckstücke, keine Dekoration, keine Schrift und keine Logos.` +
+    (distancePrompt(distance) ? ` ${distancePrompt(distance)}.` : "")
   );
 }
 
@@ -108,6 +110,7 @@ function buildPrompt(): string {
 export async function generateEnhancedShot(
   product: SourceProductRow,
   backgroundId: number | null,
+  distance: string | null = null,
 ): Promise<{ backgroundName: string }> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY ist nicht gesetzt (.env.local prüfen).");
@@ -127,7 +130,7 @@ export async function generateEnhancedShot(
   if (existing?.status === "approved") return { backgroundName: background.name };
 
   const [src, bg] = await Promise.all([fetchImageBuffer(sourceUrl), fetchImageBuffer(background.imageUrl)]);
-  const prompt = buildPrompt();
+  const prompt = buildPrompt(distance);
   const label = `${ENHANCED_SHOT_LABEL} – ${background.name}`;
 
   try {

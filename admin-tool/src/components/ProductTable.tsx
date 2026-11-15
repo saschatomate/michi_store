@@ -7,6 +7,7 @@ import { PackageSearch, Send, X, CheckCircle2, ImageOff } from "lucide-react";
 import { BusyNote, Spinner } from "@/components/Busy";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Lightbox } from "@/components/Lightbox";
+import { SHOT_DISTANCES } from "@/lib/shot-distance";
 import { sendSelectedToPipeline, type PipelineImageMode } from "@/lib/product-actions";
 import type { ProductStatus } from "@/db/schema";
 import { isRecent, SHOPIFY_ACTION_LABEL, type ShopifyAction } from "@/lib/shopify-changes";
@@ -48,6 +49,7 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [isPending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [distance, setDistance] = useState("auto");
   const [imageMode, setImageMode] = useState<PipelineImageMode>("dg");
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
@@ -78,7 +80,7 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
     const ids = Array.from(selected);
     startTransition(async () => {
       try {
-        const result = await sendSelectedToPipeline(ids, imageMode);
+        const result = await sendSelectedToPipeline(ids, imageMode, distance === "auto" ? null : distance);
         const image =
           result.imageMode === "dg"
             ? "Erstes DG-Bild ist freigegeben."
@@ -137,6 +139,19 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
             <option value="ai">Bild: KI-Produktbild auf Hintergrund</option>
             <option value="none">Ohne Bild</option>
           </select>
+          {imageMode === "ai" && (
+            <select
+              value={distance}
+              onChange={(e) => setDistance(e.target.value)}
+              disabled={isPending}
+              className="fade-in rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-700"
+              title="Aus welcher Distanz das Schmuckstück gesehen wird"
+            >
+              {SHOT_DISTANCES.map((d) => (
+                <option key={d.key} value={d.key}>{d.key === "auto" ? "Distanz: automatisch" : d.label}</option>
+              ))}
+            </select>
+          )}
           <button
             onClick={sendToPipeline}
             disabled={isPending || selected.size > MAX_BATCH_SIZE}

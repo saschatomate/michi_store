@@ -68,6 +68,7 @@ export async function deleteBackground(id: number): Promise<void> {
 export async function generateEnhancedShotForProduct(
   productId: number,
   backgroundId: number | null,
+  distance: string | null = null,
 ): Promise<{ queued: boolean }> {
   await requireAuth();
   const product = await db.query.sourceProducts.findFirst({
@@ -75,7 +76,7 @@ export async function generateEnhancedShotForProduct(
     columns: { id: true },
   });
   if (!product) throw new Error("Artikel nicht gefunden.");
-  const queued = (await enqueueEnhancedShots([productId], backgroundId)) > 0;
+  const queued = (await enqueueEnhancedShots([productId], backgroundId, distance)) > 0;
   revalidatePath(`/products/${productId}`);
   return { queued };
 }

@@ -71,6 +71,7 @@ export type PipelineImageMode = "dg" | "ai" | "none";
 export async function sendSelectedToPipeline(
   ids: number[],
   imageMode: PipelineImageMode = "dg",
+  distance: string | null = null,
 ): Promise<{ sent: number; imageMode: PipelineImageMode }> {
   await requireAuth();
   if (ids.length === 0) return { sent: 0, imageMode };
@@ -113,7 +114,7 @@ export async function sendSelectedToPipeline(
     for (const r of rows) await adoptFirstDgImage(r);
   } else if (imageMode === "ai") {
     // Läuft im Hintergrund weiter (image-jobs.ts); fertige Bilder erscheinen von selbst.
-    await enqueueEnhancedShots(rows.map((r) => r.id), null);
+    await enqueueEnhancedShots(rows.map((r) => r.id), null, distance);
   }
 
   revalidatePath("/");

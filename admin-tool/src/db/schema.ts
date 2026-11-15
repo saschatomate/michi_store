@@ -408,6 +408,8 @@ export const imageJobs = pgTable(
       .references(() => sourceProducts.id),
     // null = KI wählt den Hintergrund
     backgroundId: integer("background_id"),
+    // Aufnahmedistanz (shot-distance.ts), null = keine Vorgabe
+    distance: text("distance"),
     status: text("status").$type<ImageJobStatus>().notNull().default("queued"),
     error: text("error"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

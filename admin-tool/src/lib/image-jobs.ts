@@ -19,7 +19,11 @@ export async function failStaleJobs(): Promise<void> {
 
 // Legt Aufträge an (Produkte mit offenem Auftrag werden übersprungen) und startet die Abarbeitung nach der
 // Antwort an den Browser. Gibt zurück, wie viele neu eingereiht wurden.
-export async function enqueueEnhancedShots(productIds: number[], backgroundId: number | null): Promise<number> {
+export async function enqueueEnhancedShots(
+  productIds: number[],
+  backgroundId: number | null,
+  distance: string | null = null,
+): Promise<number> {
   await failStaleJobs();
   const open = await db
     .select({ id: imageJobs.sourceProductId })
@@ -31,7 +35,7 @@ export async function enqueueEnhancedShots(productIds: number[], backgroundId: n
 
   const jobs = await db
     .insert(imageJobs)
-    .values(toQueue.map((sourceProductId) => ({ sourceProductId, backgroundId })))
+    .values(toQueue.map((sourceProductId) => ({ sourceProductId, backgroundId, distance })))
     .returning({ id: imageJobs.id });
 
   const queue = jobs.map((j) => j.id);
@@ -52,7 +56,7 @@ async function runJob(jobId: number): Promise<void> {
   try {
     const product = await db.query.sourceProducts.findFirst({ where: eq(sourceProducts.id, job.sourceProductId) });
     if (!product) throw new Error("Artikel nicht gefunden.");
-    await generateEnhancedShot(product, job.backgroundId);
+    await generateEnhancedShot(product, job.backgroundId, job.distance);
     await db.update(imageJobs).set({ status: "done", finishedAt: new Date() }).where(eq(imageJobs.id, jobId));
   } catch (err) {
     await db
