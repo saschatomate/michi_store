@@ -337,3 +337,39 @@ export async function shopifyReplaceMedia(productId: string, urls: string[], alt
     throwOnUserErrors("Shopify productDeleteMedia", del.productDeleteMedia.mediaUserErrors);
   }
 }
+
+// Legt die Metafeld-Definitionen für die Shop-Filter an (idempotent: vorhandene werden übersprungen).
+// "adminFilterable" + Storefront-Lesezugriff sind Voraussetzung, damit Shopify Search & Discovery die
+// Felder als Filter anbieten kann. Gibt zurück, was angelegt wurde und was schon existierte.
+export async function shopifyEnsureMetafieldDefinitions(
+  defs: readonly { key: string; name: string; type: string }[],
+  namespace: string,
+): Promise<{ created: string[]; existing: string[] }> {
+  const created: string[] = [];
+  const existing: string[] = [];
+  for (const def of defs) {
+    const res = await shopifyGraphql<{
+      metafieldDefinitionCreate: { userErrors: (ShopifyUserError & { code?: string })[] };
+    }>(
+      `mutation($definition: MetafieldDefinitionInput!) {
+        metafieldDefinitionCreate(definition: $definition) { userErrors { field message code } }
+      }`,
+      {
+        definition: {
+          name: def.name,
+          namespace,
+          key: def.key,
+          type: def.type,
+          ownerType: "PRODUCT",
+          access: { storefront: "PUBLIC_READ" },
+          capabilities: { adminFilterable: { enabled: true } },
+        },
+      },
+    );
+    const errors = res.metafieldDefinitionCreate.userErrors;
+    if (errors.length === 0) created.push(def.key);
+    else if (errors.every((e) => e.code === "TAKEN")) existing.push(def.key);
+    else throwOnUserErrors(`Shopify Metafeld-Definition ${def.key}`, errors);
+  }
+  return { created, existing };
+}

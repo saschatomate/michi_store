@@ -77,3 +77,11 @@ export async function deleteShopifyErrorsOlderThan(days: number): Promise<{ dele
   revalidatePath("/products/[id]", "page");
   return { deleted: rows.length };
 }
+
+// Einmalig bzw. bei neuen Filterfeldern: Metafeld-Definitionen in Shopify anlegen (Search & Discovery).
+export async function setupFilterMetafields(): Promise<{ created: string[]; existing: string[] }> {
+  await requireAuth();
+  const { shopifyEnsureMetafieldDefinitions } = await import("@/lib/shopify-client");
+  const { FILTER_METAFIELDS } = await import("@/lib/filter-facets");
+  return shopifyEnsureMetafieldDefinitions(FILTER_METAFIELDS, "marinell");
+}

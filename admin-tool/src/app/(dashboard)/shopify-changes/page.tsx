@@ -4,6 +4,7 @@ import { listShopifyFeed } from "@/lib/shopify-activity";
 import { ShopifyChangeDetails, ShopifyEventHeader } from "@/components/ShopifyChangeList";
 import { BulkDeleteErrors } from "@/components/ShopifyErrorCleanup";
 import { cardClass } from "@/lib/ui";
+import { FilterMetafieldSetup } from "@/components/FilterMetafieldSetup";
 
 export default async function ShopifyChangesPage() {
   const feed = await listShopifyFeed(200);
@@ -26,6 +27,10 @@ export default async function ShopifyChangesPage() {
             geändert wurde (alt → neu), wann und durch wen. Die letzten 200 Ereignisse.
           </span>
         </p>
+      </div>
+
+      <div className={`${cardClass} px-4 py-3`}>
+        <FilterMetafieldSetup />
       </div>
 
       {feed.some((i) => i.action === "shopify_error") && (

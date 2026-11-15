@@ -24,6 +24,7 @@ import { deriveAvailability } from "@/lib/availability";
 import { loadAvailabilityRules } from "@/lib/availability-rules";
 import { DiscontinuedToggle } from "@/components/DiscontinuedToggle";
 import { EnhancedShotButton } from "@/components/EnhancedShotButton";
+import { deriveFilterFacets } from "@/lib/filter-facets";
 import { RingResizableToggle } from "@/components/RingResizableToggle";
 import { ShopifyPublishSection } from "@/components/ShopifyPublishSection";
 import { shopifyAdminProductUrl } from "@/lib/shopify-client";
@@ -261,6 +262,28 @@ export default async function ProductDetailPage({
               <p className="mt-1.5 text-[11px] text-zinc-400">Grün = Lagerware, grau = Anfertigung.</p>
             </div>
           )}
+          {(() => {
+            const f = deriveFilterFacets(product);
+            const rows: [string, string | null][] = [
+              ["Metallfarbe", f.metalColors.join(", ") || null],
+              ["Legierung", f.alloy],
+              ["Schliffform", f.cutShape],
+              ["Karatgruppe", f.caratGroup],
+            ];
+            return (
+              <div className="mt-3">
+                <div className="mb-1.5 text-xs text-zinc-500">Shop-Filter (automatisch abgeleitet)</div>
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                  {rows.map(([label, value]) => (
+                    <div key={label} className="flex justify-between gap-2">
+                      <dt className="text-zinc-500">{label}</dt>
+                      <dd className={value ? "text-zinc-900" : "text-zinc-400"}>{value ?? "nicht ableitbar"}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            );
+          })()}
           {product.hauptkategorie === "Ring" && product.origin !== "custom" && (
             <div className="mt-3">
               <RingResizableToggle id={product.id} resizable={product.ringResizable} />

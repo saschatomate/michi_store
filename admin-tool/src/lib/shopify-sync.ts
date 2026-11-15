@@ -13,6 +13,7 @@
 //   aktuell - resyncChangedProducts() (nächtlicher Cron) und der Knopf am Produkt ziehen es nach.
 // - Der Anfangsbestand kommt beim Erstanlegen aus der DG-Datei (bestand); bei Updates werden Mengen nie überschrieben,
 //   damit durch Bestellungen entstandene Minusbestände (= offene Anfertigungen) erhalten bleiben.
+import { deriveFilterFacets } from "@/lib/filter-facets";
 import { createHash } from "node:crypto";
 import { and, asc, eq, isNotNull, inArray, or } from "drizzle-orm";
 import { db } from "@/db/client";
@@ -181,6 +182,7 @@ export function buildProductSetInput(args: {
     options.isTest ? "claude-test" : null,
   ].filter((t): t is string => Boolean(t));
 
+  const facets = deriveFilterFacets(product);
   const metafields: Metafield[] = [
     ...metafield("sku", "single_line_text_field", product.modellErweitert),
     ...metafield("source", "single_line_text_field", product.origin),
@@ -198,6 +200,11 @@ export function buildProductSetInput(args: {
     ...metafield("cert_institute", "single_line_text_field", product.certInstitute),
     ...metafield("cert_number", "single_line_text_field", product.certNumber),
     ...metafield("design_family_id", "single_line_text_field", product.designFamilyId),
+    // Filterwerte für die Shop-Navigation (filter-facets.ts)
+    ...(facets.metalColors.length > 0 ? metafield("metal_colors", "list.single_line_text_field", JSON.stringify(facets.metalColors)) : []),
+    ...metafield("alloy", "single_line_text_field", facets.alloy),
+    ...metafield("stone_cut", "single_line_text_field", facets.cutShape),
+    ...metafield("carat_group", "single_line_text_field", facets.caratGroup),
   ];
 
   return {
