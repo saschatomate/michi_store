@@ -2,14 +2,14 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, Upload } from "lucide-react";
+import { ImagePlus, Trash2, Upload } from "lucide-react";
 import {
   createBackgroundUploadUrl,
   deleteBackground,
   registerBackground,
   updateBackground,
 } from "@/lib/background-actions";
-import { buttonGhost, buttonPrimary, cardClass, inputClass } from "@/lib/ui";
+import { buttonGhost, buttonPrimary, buttonSecondary, cardClass, inputClass } from "@/lib/ui";
 
 type Item = { id: number; name: string; description: string; categories: string[]; imageUrl: string };
 
@@ -116,7 +116,19 @@ export function BackgroundManager({ backgrounds }: { backgrounds: Item[] }) {
     <div className="space-y-4">
       <div className={`${cardClass} space-y-2 p-4`}>
         <div className="text-sm font-medium text-zinc-900">Neuen Hintergrund anlegen</div>
-        <input ref={fileRef} type="file" accept={TYPES.join(",")} onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />
+        <div className="flex items-center gap-2">
+          <button type="button" className={buttonSecondary} onClick={() => fileRef.current?.click()}>
+            <ImagePlus size={14} /> Bild auswählen
+          </button>
+          <span className="truncate text-xs text-zinc-500">{file ? file.name : "Noch keine Datei gewählt"}</span>
+          <input
+            ref={fileRef}
+            type="file"
+            accept={TYPES.join(",")}
+            className="hidden"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+        </div>
         <input className={inputClass} placeholder="Name (z.B. Dunkler Marmor)" value={name} onChange={(e) => setName(e.target.value)} />
         <textarea className={inputClass} rows={2} placeholder="Wofür passt er? (Hilfe für die automatische Auswahl)" value={description} onChange={(e) => setDescription(e.target.value)} />
         <input className={inputClass} placeholder="Bevorzugte Kategorien, kommagetrennt (optional)" value={categories} onChange={(e) => setCategories(e.target.value)} />
