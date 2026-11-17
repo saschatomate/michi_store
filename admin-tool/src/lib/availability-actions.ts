@@ -58,6 +58,5 @@ export async function setRingResizable(id: number, resizable: boolean): Promise<
     action: "updated",
     changes: { ringResizable: { from: product.ringResizable, to: resizable } },
   });
-  revalidatePath("/");
   revalidatePath(`/products/${id}`);
 }
