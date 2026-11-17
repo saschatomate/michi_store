@@ -134,7 +134,7 @@ export async function generateEnhancedShot(
   const label = `${ENHANCED_SHOT_LABEL} – ${background.name}`;
 
   try {
-    const client = new OpenAI({ apiKey, maxRetries: 6 });
+    const client = new OpenAI({ apiKey, maxRetries: 1, timeout: 240_000 });
     const response = await client.images.edit({
       image: [
         await toFile(src, "product", { type: guessMimeType(sourceUrl) }),
