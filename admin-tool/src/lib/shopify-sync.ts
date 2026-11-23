@@ -37,7 +37,6 @@ type SourceProduct = typeof sourceProducts.$inferSelect;
 
 const VENDOR = "MARINELL";
 const NS = "marinell";
-const KARAT_FORMAT = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 3 });
 
 export type ShopifyMode = "draft" | "active";
 
@@ -217,7 +216,7 @@ export function buildProductSetInput(args: {
     ...metafield("legierung", "single_line_text_field", product.legierung?.trim(), "custom"),
     ...metafield("materialfarbe", "single_line_text_field", product.hauptmaterial?.trim(), "custom"),
     ...metafield("schliffform", "single_line_text_field", (product.cutShape || product.diamantSchliffguete)?.trim(), "custom"),
-    ...metafield("karat", "single_line_text_field", product.caratur ? `${KARAT_FORMAT.format(product.caratur)} ct` : null, "custom"),
+    ...metafield("karat", "single_line_text_field", product.legierung?.trim(), "custom"),
     ...metafield("diamant", "single_line_text_field", product.stoneOrigin ? STONE_ORIGIN_LABELS[product.stoneOrigin] : null, "custom1"),
   ];
 
