@@ -218,7 +218,8 @@ export function buildProductSetInput(args: {
     ...metafield("materialfarbe", "single_line_text_field", product.hauptmaterial?.trim(), "custom"),
     ...metafield("schliffform", "single_line_text_field", (product.cutShape || product.diamantSchliffguete)?.trim(), "custom"),
     ...metafield("karat", "single_line_text_field", product.caratur ? `${KARAT_FORMAT.format(product.caratur)} ct` : null, "custom"),
-    ...metafield("diamant", "single_line_text_field", product.stoneOrigin ? STONE_ORIGIN_LABELS[product.stoneOrigin] : null, "custom1"),
+    // Aktuell für alle Produkte fest "Naturstein" (Vorgabe).
+    ...metafield("diamant", "single_line_text_field", "Naturstein", "custom1"),
   ];
 
   return {
