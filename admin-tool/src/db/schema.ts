@@ -410,6 +410,8 @@ export const imageJobs = pgTable(
     backgroundId: integer("background_id"),
     // Aufnahmedistanz (shot-distance.ts), null = keine Vorgabe
     distance: text("distance"),
+    // Bildqualität (image-quality.ts: low|medium|high), null = Standard (hoch)
+    quality: text("quality"),
     status: text("status").$type<ImageJobStatus>().notNull().default("queued"),
     error: text("error"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

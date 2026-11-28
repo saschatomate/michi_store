@@ -6,12 +6,14 @@ import { Sparkles } from "lucide-react";
 import { BusyNote, Spinner } from "@/components/Busy";
 import { generateEnhancedShotForProduct } from "@/lib/background-actions";
 import { SHOT_DISTANCES } from "@/lib/shot-distance";
+import { DEFAULT_IMAGE_QUALITY, IMAGE_QUALITIES } from "@/lib/image-quality";
 import { buttonSecondary, cardClass, selectClass } from "@/lib/ui";
 
 export function EnhancedShotButton({ id, backgrounds, running }: { id: number; backgrounds: { id: number; name: string }[]; running: boolean }) {
   const router = useRouter();
   const [choice, setChoice] = useState("auto");
   const [distance, setDistance] = useState("auto");
+  const [quality, setQuality] = useState<string>(DEFAULT_IMAGE_QUALITY);
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -21,7 +23,7 @@ export function EnhancedShotButton({ id, backgrounds, running }: { id: number; b
     setInfo(null);
     startTransition(async () => {
       try {
-        const r = await generateEnhancedShotForProduct(id, choice === "auto" ? null : Number(choice), distance === "auto" ? null : distance);
+        const r = await generateEnhancedShotForProduct(id, choice === "auto" ? null : Number(choice), distance === "auto" ? null : distance, quality);
         setInfo(r.queued ? "Auftrag gestartet - das Bild erscheint von selbst, du kannst die Seite verlassen." : "Für dieses Produkt läuft bereits ein Auftrag.");
         router.refresh();
       } catch (err) {
@@ -54,6 +56,11 @@ export function EnhancedShotButton({ id, backgrounds, running }: { id: number; b
       <select className={selectClass} value={distance} onChange={(e) => setDistance(e.target.value)} disabled={isPending || running} title="Aus welcher Distanz das Schmuckstück gesehen wird">
         {SHOT_DISTANCES.map((d) => (
           <option key={d.key} value={d.key}>{d.key === "auto" ? "Distanz: automatisch" : d.label}</option>
+        ))}
+      </select>
+      <select className={selectClass} value={quality} onChange={(e) => setQuality(e.target.value)} disabled={isPending || running} title="Bildqualität: niedriger = schneller und günstiger">
+        {IMAGE_QUALITIES.map((q) => (
+          <option key={q.key} value={q.key}>Qualität: {q.label}</option>
         ))}
       </select>
       <button className={buttonSecondary} onClick={run} disabled={isPending || running || backgrounds.length === 0}>

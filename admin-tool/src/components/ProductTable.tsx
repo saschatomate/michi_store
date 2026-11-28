@@ -8,6 +8,7 @@ import { BusyNote, Spinner } from "@/components/Busy";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Lightbox } from "@/components/Lightbox";
 import { SHOT_DISTANCES } from "@/lib/shot-distance";
+import { DEFAULT_IMAGE_QUALITY, IMAGE_QUALITIES } from "@/lib/image-quality";
 import { sendSelectedToPipeline, type PipelineImageMode } from "@/lib/product-actions";
 import type { ProductStatus } from "@/db/schema";
 import { isRecent, SHOPIFY_ACTION_LABEL, type ShopifyAction } from "@/lib/shopify-changes";
@@ -50,6 +51,7 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
   const [isPending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [distance, setDistance] = useState("auto");
+  const [quality, setQuality] = useState<string>(DEFAULT_IMAGE_QUALITY);
   const [imageMode, setImageMode] = useState<PipelineImageMode>("dg");
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
@@ -80,7 +82,7 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
     const ids = Array.from(selected);
     startTransition(async () => {
       try {
-        const result = await sendSelectedToPipeline(ids, imageMode, distance === "auto" ? null : distance);
+        const result = await sendSelectedToPipeline(ids, imageMode, distance === "auto" ? null : distance, quality);
         const image =
           result.imageMode === "dg"
             ? "Erstes DG-Bild ist freigegeben."
@@ -149,6 +151,19 @@ export function ProductTable({ products }: { products: ProductListItem[] }) {
             >
               {SHOT_DISTANCES.map((d) => (
                 <option key={d.key} value={d.key}>{d.key === "auto" ? "Distanz: automatisch" : d.label}</option>
+              ))}
+            </select>
+          )}
+          {imageMode === "ai" && (
+            <select
+              value={quality}
+              onChange={(e) => setQuality(e.target.value)}
+              disabled={isPending}
+              className="fade-in rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-700"
+              title="Bildqualität: niedriger = schneller und günstiger"
+            >
+              {IMAGE_QUALITIES.map((q) => (
+                <option key={q.key} value={q.key}>Qualität: {q.label}</option>
               ))}
             </select>
           )}

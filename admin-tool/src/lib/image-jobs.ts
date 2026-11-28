@@ -4,6 +4,7 @@ import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { imageJobs, sourceProducts } from "@/db/schema";
 import { generateEnhancedShot } from "@/lib/enhanced-shot";
+import { parseImageQuality, type ImageQuality } from "@/lib/image-quality";
 
 const CONCURRENCY = 3;
 // Ein Auftrag, der so lange "läuft", ist abgebrochen (Server beendet, Zeitlimit) - sonst bliebe er ewig offen.
@@ -23,6 +24,7 @@ export async function enqueueEnhancedShots(
   productIds: number[],
   backgroundId: number | null,
   distance: string | null = null,
+  quality: ImageQuality = "high",
 ): Promise<number> {
   await failStaleJobs();
   const open = await db
@@ -35,7 +37,7 @@ export async function enqueueEnhancedShots(
 
   const jobs = await db
     .insert(imageJobs)
-    .values(toQueue.map((sourceProductId) => ({ sourceProductId, backgroundId, distance })))
+    .values(toQueue.map((sourceProductId) => ({ sourceProductId, backgroundId, distance, quality })))
     .returning({ id: imageJobs.id });
 
   const queue = jobs.map((j) => j.id);
@@ -56,7 +58,7 @@ async function runJob(jobId: number): Promise<void> {
   try {
     const product = await db.query.sourceProducts.findFirst({ where: eq(sourceProducts.id, job.sourceProductId) });
     if (!product) throw new Error("Artikel nicht gefunden.");
-    await generateEnhancedShot(product, job.backgroundId, job.distance);
+    await generateEnhancedShot(product, job.backgroundId, job.distance, parseImageQuality(job.quality));
     await db.update(imageJobs).set({ status: "done", finishedAt: new Date() }).where(eq(imageJobs.id, jobId));
   } catch (err) {
     await db

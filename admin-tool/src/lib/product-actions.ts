@@ -8,6 +8,7 @@ import { requireAuth } from "@/lib/dal";
 import { sendToPipelineWebhook } from "@/lib/pipeline-webhook";
 import { generateProductContent, type GeneratedContent } from "@/lib/text-generation";
 import { enqueueEnhancedShots } from "@/lib/image-jobs";
+import { parseImageQuality } from "@/lib/image-quality";
 import { adoptFirstDgImage } from "@/lib/dg-image-adopt";
 import { getMissingFields, FIELD_LABELS } from "@/lib/custom-product";
 
@@ -72,6 +73,7 @@ export async function sendSelectedToPipeline(
   ids: number[],
   imageMode: PipelineImageMode = "dg",
   distance: string | null = null,
+  quality: string | null = null,
 ): Promise<{ sent: number; imageMode: PipelineImageMode }> {
   await requireAuth();
   if (ids.length === 0) return { sent: 0, imageMode };
@@ -114,7 +116,7 @@ export async function sendSelectedToPipeline(
     for (const r of rows) await adoptFirstDgImage(r);
   } else if (imageMode === "ai") {
     // Läuft im Hintergrund weiter (image-jobs.ts); fertige Bilder erscheinen von selbst.
-    await enqueueEnhancedShots(rows.map((r) => r.id), null, distance);
+    await enqueueEnhancedShots(rows.map((r) => r.id), null, distance, parseImageQuality(quality));
   }
 
   revalidatePath("/");

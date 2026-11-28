@@ -8,6 +8,7 @@ import { imageBackgrounds, sourceProducts } from "@/db/schema";
 import { requireAuth } from "@/lib/dal";
 import { createSignedImageUpload, deleteGeneratedImage, publicImageUrl } from "@/lib/image-storage";
 import { enqueueEnhancedShots } from "@/lib/image-jobs";
+import { parseImageQuality } from "@/lib/image-quality";
 
 const UPLOAD_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 
@@ -69,6 +70,7 @@ export async function generateEnhancedShotForProduct(
   productId: number,
   backgroundId: number | null,
   distance: string | null = null,
+  quality: string | null = null,
 ): Promise<{ queued: boolean }> {
   await requireAuth();
   const product = await db.query.sourceProducts.findFirst({
@@ -76,7 +78,7 @@ export async function generateEnhancedShotForProduct(
     columns: { id: true },
   });
   if (!product) throw new Error("Artikel nicht gefunden.");
-  const queued = (await enqueueEnhancedShots([productId], backgroundId, distance)) > 0;
+  const queued = (await enqueueEnhancedShots([productId], backgroundId, distance, parseImageQuality(quality))) > 0;
   revalidatePath(`/products/${productId}`);
   return { queued };
 }

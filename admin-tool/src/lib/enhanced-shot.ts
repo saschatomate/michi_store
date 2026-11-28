@@ -7,6 +7,7 @@ import { imageBackgrounds, productGeneratedImages, type sourceProducts } from "@
 import { fetchImageBuffer, guessMimeType } from "@/lib/image-generation";
 import { estimateClaudeTextCost, estimateOpenAiImageCost, recordApiUsage } from "@/lib/cost-tracking";
 import { distancePrompt } from "@/lib/shot-distance";
+import type { ImageQuality } from "@/lib/image-quality";
 import { signGeneratedImage } from "@/lib/c2pa-sign";
 import { uploadGeneratedImage, deleteGeneratedImage } from "@/lib/image-storage";
 
@@ -111,6 +112,7 @@ export async function generateEnhancedShot(
   product: SourceProductRow,
   backgroundId: number | null,
   distance: string | null = null,
+  quality: ImageQuality = "high",
 ): Promise<{ backgroundName: string }> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY ist nicht gesetzt (.env.local prüfen).");
@@ -143,7 +145,7 @@ export async function generateEnhancedShot(
       prompt,
       model: OPENAI_IMAGE_MODEL,
       size: OUTPUT_SIZE,
-      quality: "high",
+      quality,
       output_format: "png",
       n: 1,
     });
